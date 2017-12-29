@@ -46,6 +46,7 @@ Utilities are available in the `XLSX.utils` object and are described in the
 - `sheet_to_txt` generates UTF16 formatted text.
 - `sheet_to_html` generates HTML output.
 - `sheet_to_formulae` generates a list of the formulae (with value fallbacks).
+- `process_images` process images (as data URLs) for a sheet.
 - `add_images_to_json` adds images (as data URLs) to json export.
 
 

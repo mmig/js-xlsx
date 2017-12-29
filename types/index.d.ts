@@ -691,6 +691,12 @@ export interface AddImagesOpts extends CommonOptions {
     keepImageData?: boolean;
 
     /**
+     * do not process/create dataUrl (will preserve binary data field too)
+     * @default false
+     */
+    rawImageData?: boolean;
+
+    /**
      * if present, will load the image data aynchronously via a `FileReader`
      * and invoke the function `oncomplete(json)` when all images
      * have been included in `json` data
@@ -800,6 +806,7 @@ export interface XLSX$Utils {
     consts: XLSX$Consts;
 
     /* FEATURE[russa]: drawing/images */
+    process_images(onimage: (cell: CellObject, image: ImageObject, rowIndex: number, columnIndex: number) => void, worksheet: WorkSheet, workbook: WorkBook, opts?: AddImagesOpts): void;
     add_images_to_json<T>(json: T[], worksheet: WorkSheet, workbook: WorkBook, opts?: AddImagesOpts): void;
     add_images_to_json(json: any[][] | any[], worksheet: WorkSheet, workbook: WorkBook, opts?: AddImagesOpts): void;
   	release_all_images(workbook: WorkBook): void;

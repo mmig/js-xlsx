@@ -288,31 +288,79 @@ Example showing the effect of `raw`:
 
 ### Images
 
-`XLSX.utils.add_images_to_json` will add images to the JSON object:
+
+`XLSX.utils.process_images` will process the images for a sheet.
+
+The utility function `XLSX.utils.add_images_to_json` is a conveniance funtion,
+that processes and adds the images to a prevously exported JSON object.
+
+Both functions take the following options:
 
 | Option Name    |  Default | Description                                          |
 | :------------- | :------: | :--------------------------------------------------- |
 |`keepImageData` | `false`  | keep binary data array when/after creating           |
+|`rawImageData`  | `false`  | do not process/create data URL                       |
 |`oncomplete`    |  none    | if specified, will load the image data aynchronously |
 
-- `keepImageData` keep binary data array when/after creating.
-- If `oncomplete` function is specified, the image data will be loaded aynchronously
-  via a `FileReader`.
+- `keepImageData` keep binary data array when/after creating image data (i.e.
+  `dataUrl` field).
+- `rawImageData` will prevent creating the `dataUrl` field, and keep the (binary)
+  `data` field as-is.
+  This option should be used, if not run in a browser environment.
+- If the `oncomplete` function is specified, the image data will be loaded
+  aynchronously via a `FileReader`.
   When all image data hase been loaded into the `json` object, the function
-  `oncomplete(json)` will be invoked.
+  `oncomplete()` will be invoked (without arguments).
+  This options should/can be used in older browser environments that do not support
+  `window.URL`.
 
 If an image for a cell is specified, the original (primitive) value of that
 cell will be replaced by an `ImageObject`:
 
-| Field Name |  Type           | Description                                                                          |
-| :--------- | :-------------: | :----------------------------------------------------------------------------------- |
-|`id`        | `string`        | keep binary data array when/after creating                                           |
-|`data`      | `Array<number>` | binary data (byte) will be discared, if `keepImageData` was not `true` (OPTIONAL)    |
-|`dataUrl`   | `string`        | the data URL for the image (OPTIONAL)                                                |
-|`release`   | `Function`      | function for releasing image resources (if data URL was created)      (OPTIONAL)     |
-|`cellValue` | `any`           | the original value of the cell, if there was one in addition to the image (OPTIONAL) |
+| Field Name |  Type           | Description                                                                                         |
+| :--------- | :-------------: | :-------------------------------------------------------------------------------------------------- |
+|`id`        | `string`        | the image ID (path of image file within workbook container)                                         |
+|`data`      | `Array<number>` | binary data (byte) will be discared, if `keepImageData` or `rawImageData` was not `true` (OPTIONAL) |
+|`dataUrl`   | `string`        | the data URL for the image (OPTIONAL)                                                               |
+|`release`   | `Function`      | function for releasing image resources (if data URL was created)      (OPTIONAL)                    |
+|`cellValue` | `any`           | the original value of the cell, if there was one in addition to the image (OPTIONAL)                |
 
-Example:
+
+Example for `process_images`:
+
+```js
+
+var sheetImages = [];
+
+//add image data using utility function process_images(onimage, sheet, wb, opts)
+XLSX.utils.process_images(
+  function(cell, image, rowIndex, columnIndex){
+
+    console.log('image for cell('+rowIndex+','+columnIndex+'): '+image.dataUrl);
+
+    var img = document.createElement('img');
+    img.src = image.dataUrl;
+
+    sheetImages.push({img: img, image: image, r: rowIndex, c: columnIndex});
+  },
+  worksheet,
+  workbook
+);
+
+//...
+
+//when images of the sheet are not displayed anymore:
+for(var iname in sheetImages){
+  sheetImages[iname].image.release();
+}
+
+//or for discarding all images in the workbook:
+XLSX.utils.release_all_images(workbook);
+
+```
+
+
+Example for `add_images_to_json`:
 
 ```js
 //export worksheet to JSON data
@@ -324,7 +372,7 @@ XLSX.utils.add_images_to_json(jsonData, worksheet, workbook);
 //-> jsonData will now contain ImageObjects in cells, that have images
 //   e.g. if cell row=2 | column=4 has an image:
 
-var img = document.createNode('img');
+var img = document.createElement('img');
 img.src = jsonData[2][4].dataUrl;
 
 //...
@@ -332,7 +380,7 @@ img.src = jsonData[2][4].dataUrl;
 //when image is not displayed anymore:
 jsonData[2][4].release();
 
-//or for discarding all images:
+//or for discarding all images in the workbook:
 XLSX.utils.release_all_images(workbook);
 
 ```

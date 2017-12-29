@@ -19532,7 +19532,22 @@ function json_to_sheet(js/*:Array<any>*/, opts)/*:Worksheet*/ {
 
 /* FEATURE[russa]: add referenced images to json */
 function util_add_images_to_json(json, sheet, wb, opts){
-	var anchor, drawing, pos, c, r, img;
+	var onimage = function(cell, img, r, c){
+		if(!json[r]){
+			if (opts && opts.WTF) throw new Error('Invalid JSON data: missing data for row ' + r);
+			json[r] = [];
+		}
+		if(json[r][c] || typeof json[r][c] === 'number'){
+			img.cellValue = json[r][c];
+		}
+		json[r][c] = img;
+	}
+	util_process_images(onimage, sheet, wb, opts);
+}
+
+//onimage(cell, image, rowIndex, columnIndex)
+function util_process_images(onimage, sheet, wb, opts){
+	var anchor, drawing, pos, c, r, img, cell;
 	var drawings = wb.Drawings;
 	var drawingEntries = wb.Workbook.Drawings;
 	var images = wb.Images;
@@ -19545,6 +19560,7 @@ function util_add_images_to_json(json, sheet, wb, opts){
 			}
 		};
 	}
+	var noDataUrl = opts && opts.rawImageData;
 	for(var drawingRef in sheet['!drawings']){
 
 		var entryId = sheet['!drawings'][drawingRef];
@@ -19560,43 +19576,33 @@ function util_add_images_to_json(json, sheet, wb, opts){
 					r = pos.row;
 					img = images[anchor.pic.imageId];
 					if(img){
-						if(oncomplete){
-							++curr;
-							util_image_to_data_url(img, opts, (function(json, r, c){
-								return function(img){
-									if(!json[r]){
-										if (opts && opts.WTF) throw new Error('Invalid JSON data: missing data for row ' + r);
-										json[r] = [];
-									}
-									if(json[r][c] || typeof json[r][c] === 'number'){
-										img.cellValue = json[r][c];
-									}
-									json[r][c] = img;
-									--curr;
-									oncomplete();
-								}
-							})(json, r, c));
+						cell = sheet[encode_cell({r: r, c: c})];
+						if(noDataUrl){
+							onimage(cell, img, r, c);
 						} else {
-							img = util_image_to_data_url(img, opts);
-							if(!json[r]){
-								if (opts && opts.WTF) throw new Error('Invalid JSON data: missing data for row ' + r);
-								json[r] = [];
+							if(oncomplete){
+								++curr;
+								util_image_to_data_url(img, opts, (function(r, c){
+									return function(img){
+										onimage(cell, img, r, c)
+										--curr;
+										oncomplete();
+									}
+								})(r, c));
+							} else {
+								img = util_image_to_data_url(img, opts);
+								onimage(cell, img, r, c);
 							}
-							if(json[r][c] || typeof json[r][c] === 'number'){
-								img.cellValue = json[r][c];
-							}
-							json[r][c] = img;
 						}
-					}
-				}
-			}
-		}
+					}//END if(img)
+				}//END if(pos &&...)
+			}//END for(drawing.anchors)
+		}//END if(entry)
 	}//END for(drawingRef)
 	finished = true;
 	if(oncomplete){
 		oncomplete();
 	}
-
 }
 
 function util_image_to_data_url(image, opts, onload){
@@ -19685,6 +19691,7 @@ var utils/*:any*/ = {
 	sheet_to_row_object_array: sheet_to_json,
 
 	/* FEATURE[russa]: utils for images */
+	process_images: util_process_images,
 	add_images_to_json: util_add_images_to_json,
 	release_all_images: util_release_all_images
 };
