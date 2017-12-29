@@ -10,6 +10,8 @@ var colregex = /<(?:\w:)?col[^>]*[\/]?>/g;
 var afregex = /<(?:\w:)?autoFilter[^>]*([\/]|>([\s\S]*)<\/(?:\w:)?autoFilter)>/g;
 var marginregex= /<(?:\w:)?pageMargins[^>]*\/>/g;
 var sheetprregex = /<(?:\w:)?sheetPr(?:[^>a-z][^>]*)?\/>/;
+/* FEATURE[russa]: find drawing references */
+var drawingsrelregex = /<(?:\w:)?drawing [^>]*>/mg;
 /* 18.3 Worksheets */
 function parse_ws_xml(data/*:?string*/, opts, idx, rels, wb/*:WBWBProps*/, themes, styles)/*:Worksheet*/ {
 	if(!data) return data;
@@ -66,6 +68,10 @@ function parse_ws_xml(data/*:?string*/, opts, idx, rels, wb/*:WBWBProps*/, theme
 	/* 18.3.1.62 pageMargins CT_PageMargins */
 	var margins = data2.match(marginregex);
 	if(margins) s['!margins'] = parse_ws_xml_margins(parsexmltag(margins[0]));
+
+	/* FEATURE[russa]: drawing refs */
+	var drawingrels = data2.match(drawingsrelregex);
+	if(drawingrels) s['!drawings'] = parse_ws_xml_drawingrels(s, drawingrels, rels);
 
 	if(!s["!ref"] && refguess.e.c >= refguess.s.c && refguess.e.r >= refguess.s.r) s["!ref"] = encode_range(refguess);
 	if(opts.sheetRows > 0 && s["!ref"]) {
@@ -146,6 +152,28 @@ function parse_ws_xml_hlinks(s, data/*:Array<string>*/, rels) {
 		}
 	}
 }
+
+/* FEATURE[russa]: parse drawing rels */
+function parse_ws_xml_drawingrels(s, data, rels) {
+	var drawingrels = [];
+	for(var i = 0; i != data.length; ++i) {
+		var val = parsexmltag(utf8read(data[i]), true);
+		if(!val.id) return;
+		var rel = rels ? rels['!id'][val.id] : null;
+		var refId;
+		if(rel) for(var en in rels){
+			if(rels[en].Id === val.id){
+				refId = en;
+				break;
+			}
+		}
+		if(refId) {
+			drawingrels.push(refId);
+		}
+	}
+	return drawingrels;
+}
+/* FEATURE[russa]: TODO write drawing rels */
 
 function parse_ws_xml_margins(margin) {
 	var o = {};

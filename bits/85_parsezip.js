@@ -36,6 +36,49 @@ function safe_parse_sheet(zip, path/*:string*/, relsPath/*:string*/, sheet, idx/
 	} catch(e) { if(opts.WTF) throw e; }
 }
 
+/* FEATURE[russa]: parse drawing/images */
+function parse_zip_images(zip, dir, opts, wb, themes, styles) {
+  if(dir.drawings && dir.drawings.length > 0){
+    var did, dpath, dname, drels, drelsfile, ind, drawing;
+    var drawings = {};
+    var images = {};
+    var list = [];
+    wb.Drawings = list;
+    var count = 0;
+    for(var n in dir.drawings){
+      dpath = dir.drawings[n].replace(/^\//, '');//rm leading slash from path
+      ind = dpath.lastIndexOf('/');
+      if(ind !== -1){
+        did = 'drawing' + (++count);
+        list.push({'drawingName': did, 'id': dir.drawings[n]});
+        dname = dpath.substring(ind+1);
+        drelsfile = dpath.substring(0, ind)  + '/_rels/' + dname + '.rels';
+        drels = parse_rels(getzipstr(zip, drelsfile, true), drelsfile);
+        safe_parse_drawing_images(zip, dpath, drelsfile, did, drels, drawings, 'drawing', images, opts, wb, themes, styles);
+      }
+    }
+    return {drawings: drawings, images: images};
+  }
+  return null;
+}
+
+/* FEATURE[russa]: parse drawing/images */
+function safe_parse_drawing_images(zip, path, relsPath, sheet, sheetRels, sheets, stype, images, opts, wb, themes, styles) {
+  try {
+		sheetRels[sheet]=parse_rels(getzipstr(zip, relsPath, true), path);
+		var data = getzipdata(zip, path);
+    switch(stype) {
+			case 'drawing':
+        var drawing = parse_drawing_images(zip, path, data, sheetRels[sheet], images, opts, themes, styles);
+        sheets[sheet] = drawing;
+        break;
+      default:
+        console.log('unknown type: ', stype);
+        break;
+    }
+	} catch(e) { if(opts.WTF) throw e; }
+}
+
 var nodirs = function nodirs(x/*:string*/)/*:boolean*/{return x.slice(-1) != '/';};
 function strip_front_slash(x/*:string*/)/*:string*/ { return x.charAt(0) == '/' ? x.slice(1) : x; }
 
@@ -173,6 +216,13 @@ function parse_zip(zip/*:ZIP*/, opts/*:?ParseOpts*/)/*:Workbook*/ {
 		if(dir.vba.length > 0) out.vbaraw = getzipdata(zip,strip_front_slash(dir.vba[0]),true);
 		else if(dir.defaults && dir.defaults.bin === 'application/vnd.ms-office.vbaProject') out.vbaraw = getzipdata(zip,'xl/vbaProject.bin',true);
 	}
+	/* FEATURE[russa]: parse drawings/images */
+	if(opts.bookImages){
+		var drawingData = parse_zip_images(zip, dir, opts, wb, themes, styles);
+		out.Drawings = drawingData.drawings;
+		out.Images = drawingData.images;
+		out.DrawingNames = wb.Drawings.map(function(entry){ return entry.drawingName; });
+	}
 	return out;
 }
 
@@ -216,4 +266,3 @@ function parse_xlsxcfb(cfb, _opts/*:?ParseOpts*/)/*:Workbook*/ {
 	if(einfo[0] == 0x02 && typeof decrypt_std76 !== 'undefined') return decrypt_std76(einfo[1], data.content, opts.password || "", opts);
 	throw new Error("File is password-protected");
 }
-

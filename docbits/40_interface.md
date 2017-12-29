@@ -46,6 +46,7 @@ Utilities are available in the `XLSX.utils` object and are described in the
 - `sheet_to_txt` generates UTF16 formatted text.
 - `sheet_to_html` generates HTML output.
 - `sheet_to_formulae` generates a list of the formulae (with value fallbacks).
+- `add_images_to_json` adds images (as data URLs) to json export.
 
 
 **Cell and cell address manipulation:**
@@ -55,4 +56,3 @@ Utilities are available in the `XLSX.utils` object and are described in the
 - `encode_col / decode_col` converts between 0-indexed columns and column names.
 - `encode_cell / decode_cell` converts cell addresses.
 - `encode_range / decode_range` converts cell ranges.
-

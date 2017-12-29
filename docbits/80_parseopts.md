@@ -21,6 +21,7 @@ The exported `read` and `readFile` functions accept an options argument:
 |`bookProps`  | false   | If true, only parse enough to get book metadata **   |
 |`bookSheets` | false   | If true, only parse enough to get the sheet names    |
 |`bookVBA`    | false   | If true, copy VBA blob to `vbaraw` field **          |
+|`bookImage`  | false   | If true, parse drawings/images                       |
 |`password`   | ""      | If defined and file is encrypted, use password **    |
 |`WTF`        | false   | If true, throw errors on unexpected file features ** |
 
@@ -127,4 +128,3 @@ var ncols = range.e.c - range.r.c + 1, nrows = range.e.r - range.s.r + 1;
 ```
 
 </details>
-

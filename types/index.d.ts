@@ -174,6 +174,12 @@ export interface ParsingOptions extends CommonOptions {
     bookSheets?: boolean;
 
     /**
+     * If true, parses drawings/images
+     * @default false
+     */
+    bookImages?: boolean;
+
+    /**
      * If defined and file is encrypted, use password
      * @default ''
      */
@@ -238,7 +244,48 @@ export interface WorkBook {
     Workbook?: WBProps;
 
     vbaraw?: any;
+
+    /* FEATURE[russa]: drawing/images */
+    DrawingNames?: string[];
+    Drawings: { [drawing: string]: DrawingObject };
+    Images: { [image: string]: ImageObject };
 }
+
+/* FEATURE[russa]: START drawing/images */
+export interface ImageObject {
+  id: string;
+  data?: number[];
+  dataUrl?: string;
+  release?: ()=>void;
+  cellValue?: any;
+}
+export type DrawingType = 'drawing';
+export interface DrawingObject {
+  '!type': DrawingType;
+  anchors: AnchorObject[];
+}
+export interface DrawingInfo {
+  drawingName: string;
+  id: string;
+}
+export type EditType = 'oneCell';
+export interface AnchorObject {
+  editAs?: EditType;
+  from?: AnchorPosition;
+  pic?: PictureObject;
+  to?: AnchorPosition;
+}
+export interface PictureObject {
+  rId: string;
+  imageId: string;
+}
+export interface AnchorPosition {
+  col?: number;
+  colOff?: number;
+  row?: number;
+  rowOff?: number;
+}
+/* FEATURE[russa]: END drawing/images */
 
 export interface SheetProps {
     /** Sheet Visibility (0=Visible 1=Hidden 2=VeryHidden) */
@@ -276,6 +323,9 @@ export interface WBProps {
 
     /** Other Workbook Properties */
     WBProps?: WorkbookProperties;
+
+    /* FEATURE[russa]: drawing/images */
+    Drawings?: DrawingInfo[];
 }
 
 /** Other Workbook Properties */
@@ -633,6 +683,23 @@ export interface Table2SheetOpts extends CommonOptions, DateNFOption {
     raw?: boolean;
 }
 
+export interface AddImagesOpts extends CommonOptions {
+    /**
+     * keep binary data array when/after creating
+     * @default false
+     */
+    keepImageData?: boolean;
+
+    /**
+     * if present, will load the image data aynchronously via a `FileReader`
+     * and invoke the function `oncomplete(json)` when all images
+     * have been included in `json` data
+     *
+     * @param  {any[][]} data the JSON data with added images
+     */
+    oncomplete?: (json: any[][]|any[]) => void;
+}
+
 /** General utilities */
 export interface XLSX$Utils {
     /* --- Import Functions --- */
@@ -731,6 +798,11 @@ export interface XLSX$Utils {
     sheet_set_array_formula(ws: WorkSheet, range: Range|string, formula: string): WorkSheet;
 
     consts: XLSX$Consts;
+
+    /* FEATURE[russa]: drawing/images */
+    add_images_to_json<T>(json: T[], worksheet: WorkSheet, workbook: WorkBook, opts?: AddImagesOpts): void;
+    add_images_to_json(json: any[][] | any[], worksheet: WorkSheet, workbook: WorkBook, opts?: AddImagesOpts): void;
+  	release_all_images(workbook: WorkBook): void;
 }
 
 export interface XLSX$Consts {

@@ -199,6 +199,131 @@ function json_to_sheet(js/*:Array<any>*/, opts)/*:Worksheet*/ {
 	return ws;
 }
 
+/* FEATURE[russa]: add referenced images to json */
+function util_add_images_to_json(json, sheet, wb, opts){
+	var anchor, drawing, pos, c, r, img;
+	var drawings = wb.Drawings;
+	var drawingEntries = wb.Workbook.Drawings;
+	var images = wb.Images;
+	var oncomplete;
+	if(opts && opts.oncomplete){
+		var curr = 0, finished = false;
+		oncomplete = function(){
+			if(finished && curr <= 0){
+				opts.oncomplete();
+			}
+		};
+	}
+	for(var drawingRef in sheet['!drawings']){
+
+		var entryId = sheet['!drawings'][drawingRef];
+		var entry = drawingEntries.find(function(entry){return entry.id === entryId});
+		if(entry){
+			drawing = drawings[entry.drawingName];
+
+			for(var i=0, size = drawing.anchors.length; i < size; ++i){
+				anchor = drawing.anchors[i];
+				pos = anchor.form || anchor.to;//not supported: absolute positioning
+				if(pos && anchor.pic && anchor.pic.imageId){
+					c = pos.col;
+					r = pos.row;
+					img = images[anchor.pic.imageId];
+					if(img){
+						if(oncomplete){
+							++curr;
+							util_image_to_data_url(img, opts, (function(json, r, c){
+								return function(img){
+									if(!json[r]){
+										if (opts && opts.WTF) throw new Error('Invalid JSON data: missing data for row ' + r);
+										json[r] = [];
+									}
+									if(json[r][c] || typeof json[r][c] === 'number'){
+										img.cellValue = json[r][c];
+									}
+									json[r][c] = img;
+									--curr;
+									oncomplete();
+								}
+							})(json, r, c));
+						} else {
+							img = util_image_to_data_url(img, opts);
+							if(!json[r]){
+								if (opts && opts.WTF) throw new Error('Invalid JSON data: missing data for row ' + r);
+								json[r] = [];
+							}
+							if(json[r][c] || typeof json[r][c] === 'number'){
+								img.cellValue = json[r][c];
+							}
+							json[r][c] = img;
+						}
+					}
+				}
+			}
+		}
+	}//END for(drawingRef)
+	finished = true;
+	if(oncomplete){
+		oncomplete();
+	}
+
+}
+
+function util_image_to_data_url(image, opts, onload){
+	if(image.release){
+		return image;
+	}
+	var data = image.data;
+	var ext = /\.(\w+)$/.exec(image.id)[1];
+	var type = ext? {type: 'image/'+ext} : void(0);
+	var dataUrl;
+	var loaded = function(){
+		image.dataUrl = dataUrl;
+		image.release = function(){
+			if(this.dataUrl){
+				(window.webkitURL||window.URL).revokeObjectURL(this.dataUrl);
+				this.dataUrl = null;
+			}
+		};
+		if(!opts || opts.keepImageData !== true){
+			image.data = null;
+		}
+	}
+
+	if(onload){
+		var reader = new FileReader();
+		reader.onload = function(evt) {
+			dataUrl = reader.result;
+			loaded();
+			onload(image);
+		};
+		reader.readAsDataURL(new Blob([Uint8Array.from(data)], type));
+	} else {
+		dataUrl = (window.webkitURL||window.URL).createObjectURL(new Blob([Uint8Array.from(data)], type));
+		loaded();
+	}
+
+	return image;
+}
+
+function util_release_data_url(image){
+	if(!image.dataUrl){
+		return image;
+	}
+	(window.webkitURL||window.URL).revokeObjectURL(image.dataUrl);
+	image.dataUrl = null;
+	return image;
+}
+
+function util_release_all_images(wb){
+	if(!wb.Images) return;
+	var img;
+	for(var id in wb.Images){
+		img = wb.Images[id];
+		util_release_data_url(img);
+	}
+}
+
+
 var utils/*:any*/ = {
 	encode_col: encode_col,
 	encode_row: encode_row,
@@ -226,6 +351,9 @@ var utils/*:any*/ = {
 	sheet_to_slk: SYLK.from_sheet,
 	sheet_to_eth: ETH.from_sheet,
 	sheet_to_formulae: sheet_to_formulae,
-	sheet_to_row_object_array: sheet_to_json
-};
+	sheet_to_row_object_array: sheet_to_json,
 
+	/* FEATURE[russa]: utils for images */
+	add_images_to_json: util_add_images_to_json,
+	release_all_images: util_release_all_images
+};

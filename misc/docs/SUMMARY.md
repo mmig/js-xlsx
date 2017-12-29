@@ -57,6 +57,7 @@
     + [UTF-16 Unicode Text](README.md#utf-16-unicode-text)
   * [HTML Output](README.md#html-output)
   * [JSON](README.md#json)
+  * [Images](README.md#images)
 - [File Formats](README.md#file-formats)
   * [Excel 2007+ XML (XLSX/XLSM)](README.md#excel-2007-xml-xlsxxlsm)
   * [Excel 2.0-95 (BIFF2/BIFF3/BIFF4/BIFF5)](README.md#excel-20-95-biff2biff3biff4biff5)

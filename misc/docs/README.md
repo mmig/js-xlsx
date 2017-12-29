@@ -104,6 +104,7 @@ enhancements, additional features by request, and dedicated support.
     + [UTF-16 Unicode Text](#utf-16-unicode-text)
   * [HTML Output](#html-output)
   * [JSON](#json)
+  * [Images](#images)
 - [File Formats](#file-formats)
   * [Excel 2007+ XML (XLSX/XLSM)](#excel-2007-xml-xlsxxlsm)
   * [Excel 2.0-95 (BIFF2/BIFF3/BIFF4/BIFF5)](#excel-20-95-biff2biff3biff4biff5)
@@ -673,6 +674,7 @@ Utilities are available in the `XLSX.utils` object and are described in the
 - `sheet_to_txt` generates UTF16 formatted text.
 - `sheet_to_html` generates HTML output.
 - `sheet_to_formulae` generates a list of the formulae (with value fallbacks).
+- `add_images_to_json` adds images (as data URLs) to json export.
 
 
 **Cell and cell address manipulation:**
@@ -682,7 +684,6 @@ Utilities are available in the `XLSX.utils` object and are described in the
 - `encode_col / decode_col` converts between 0-indexed columns and column names.
 - `encode_cell / decode_cell` converts cell addresses.
 - `encode_range / decode_range` converts cell ranges.
-
 ## Common Spreadsheet Format
 
 js-xlsx conforms to the Common Spreadsheet Format (CSF):
@@ -1387,6 +1388,7 @@ The exported `read` and `readFile` functions accept an options argument:
 |`bookProps`  | false   | If true, only parse enough to get book metadata **   |
 |`bookSheets` | false   | If true, only parse enough to get the sheet names    |
 |`bookVBA`    | false   | If true, copy VBA blob to `vbaraw` field **          |
+|`bookImage`  | false   | If true, parse drawings/images                       |
 |`password`   | ""      | If defined and file is encrypted, use password **    |
 |`WTF`        | false   | If true, throw errors on unexpected file features ** |
 
@@ -1486,7 +1488,6 @@ expected number of rows or columns.  Extracting the range is extremely simple:
 var range = XLSX.utils.decode_range(worksheet['!ref']);
 var ncols = range.e.c - range.r.c + 1, nrows = range.e.r - range.s.r + 1;
 ```
-
 
 ## Writing Options
 
@@ -1827,6 +1828,56 @@ Example showing the effect of `raw`:
   [ 2, 3, 4, 5, 6, 7, 8 ] ]
 ```
 
+### Images
+
+`XLSX.utils.add_images_to_json` will add images to the JSON object:
+
+| Option Name    |  Default | Description                                          |
+| :------------- | :------: | :--------------------------------------------------- |
+|`keepImageData` | `false`  | keep binary data array when/after creating           |
+|`oncomplete`    |  none    | if specified, will load the image data aynchronously |
+
+- `keepImageData` keep binary data array when/after creating.
+- If `oncomplete` function is specified, the image data will be loaded aynchronously
+  via a `FileReader`.
+  When all image data hase been loaded into the `json` object, the function
+  `oncomplete(json)` will be invoked.
+
+If an image for a cell is specified, the original (primitive) value of that
+cell will be replaced by an `ImageObject`:
+
+| Field Name |  Type           | Description                                                                          |
+| :--------- | :-------------: | :----------------------------------------------------------------------------------- |
+|`id`        | `string`        | keep binary data array when/after creating                                           |
+|`data`      | `Array<number>` | binary data (byte) will be discared, if `keepImageData` was not `true` (OPTIONAL)    |
+|`dataUrl`   | `string`        | the data URL for the image (OPTIONAL)                                                |
+|`release`   | `Function`      | function for releasing image resources (if data URL was created)      (OPTIONAL)     |
+|`cellValue` | `any`           | the original value of the cell, if there was one in addition to the image (OPTIONAL) |
+
+Example:
+
+```js
+//export worksheet to JSON data
+var jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, blankrows: false});
+
+//add image data using utility function add_images_to_json(json, sheet, wb, opts)
+XLSX.utils.add_images_to_json(jsonData, worksheet, workbook);
+
+//-> jsonData will now contain ImageObjects in cells, that have images
+//   e.g. if cell row=2 | column=4 has an image:
+
+var img = document.createNode('img');
+img.src = jsonData[2][4].dataUrl;
+
+//...
+
+//when image is not displayed anymore:
+jsonData[2][4].release();
+
+//or for discarding all images:
+XLSX.utils.release_all_images(workbook);
+
+```
 ## File Formats
 
 Despite the library name `xlsx`, it supports numerous spreadsheet file formats:

@@ -286,3 +286,53 @@ Example showing the effect of `raw`:
 ```
 </details>
 
+### Images
+
+`XLSX.utils.add_images_to_json` will add images to the JSON object:
+
+| Option Name    |  Default | Description                                          |
+| :------------- | :------: | :--------------------------------------------------- |
+|`keepImageData` | `false`  | keep binary data array when/after creating           |
+|`oncomplete`    |  none    | if specified, will load the image data aynchronously |
+
+- `keepImageData` keep binary data array when/after creating.
+- If `oncomplete` function is specified, the image data will be loaded aynchronously
+  via a `FileReader`.
+  When all image data hase been loaded into the `json` object, the function
+  `oncomplete(json)` will be invoked.
+
+If an image for a cell is specified, the original (primitive) value of that
+cell will be replaced by an `ImageObject`:
+
+| Field Name |  Type           | Description                                                                          |
+| :--------- | :-------------: | :----------------------------------------------------------------------------------- |
+|`id`        | `string`        | keep binary data array when/after creating                                           |
+|`data`      | `Array<number>` | binary data (byte) will be discared, if `keepImageData` was not `true` (OPTIONAL)    |
+|`dataUrl`   | `string`        | the data URL for the image (OPTIONAL)                                                |
+|`release`   | `Function`      | function for releasing image resources (if data URL was created)      (OPTIONAL)     |
+|`cellValue` | `any`           | the original value of the cell, if there was one in addition to the image (OPTIONAL) |
+
+Example:
+
+```js
+//export worksheet to JSON data
+var jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, blankrows: false});
+
+//add image data using utility function add_images_to_json(json, sheet, wb, opts)
+XLSX.utils.add_images_to_json(jsonData, worksheet, workbook);
+
+//-> jsonData will now contain ImageObjects in cells, that have images
+//   e.g. if cell row=2 | column=4 has an image:
+
+var img = document.createNode('img');
+img.src = jsonData[2][4].dataUrl;
+
+//...
+
+//when image is not displayed anymore:
+jsonData[2][4].release();
+
+//or for discarding all images:
+XLSX.utils.release_all_images(workbook);
+
+```
