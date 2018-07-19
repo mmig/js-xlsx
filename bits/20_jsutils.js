@@ -1,10 +1,12 @@
-function isval(x/*:?any*/)/*:boolean*/ { return x !== undefined && x !== null; }
-
-function keys(o/*:any*/)/*:Array<any>*/ { return Object.keys(o); }
+function keys(o/*:any*/)/*:Array<any>*/ {
+	var ks = Object.keys(o), o2 = [];
+	for(var i = 0; i < ks.length; ++i) if(o.hasOwnProperty(ks[i])) o2.push(ks[i]);
+	return o2;
+}
 
 function evert_key(obj/*:any*/, key/*:string*/)/*:EvertType*/ {
 	var o = ([]/*:any*/), K = keys(obj);
-	for(var i = 0; i !== K.length; ++i) o[obj[K[i]][key]] = K[i];
+	for(var i = 0; i !== K.length; ++i) if(o[obj[K[i]][key]] == null) o[obj[K[i]][key]] = K[i];
 	return o;
 }
 
@@ -51,9 +53,9 @@ function parse_isodur(s) {
 		if(!m[i]) continue;
 		mt = 1;
 		if(i > 3) time = true;
-		switch(m[i].substr(m[i].length-1)) {
+		switch(m[i].slice(m[i].length-1)) {
 			case 'Y':
-				throw new Error("Unsupported ISO Duration Field: " + m[i].substr(m[i].length-1));
+				throw new Error("Unsupported ISO Duration Field: " + m[i].slice(m[i].length-1));
 			case 'D': mt *= 24;
 				/* falls through */
 			case 'H': mt *= 60;
@@ -99,15 +101,10 @@ function cc2str(arr/*:Array<number>*/)/*:string*/ {
 	return o;
 }
 
-function str2cc(str) {
-	var o = [];
-	for(var i = 0; i != str.length; ++i) o.push(str.charCodeAt(i));
-	return o;
-}
-
 function dup(o/*:any*/)/*:any*/ {
 	if(typeof JSON != 'undefined' && !Array.isArray(o)) return JSON.parse(JSON.stringify(o));
 	if(typeof o != 'object' || o == null) return o;
+	if(o instanceof Date) return new Date(o.getTime());
 	var out = {};
 	for(var k in o) if(o.hasOwnProperty(k)) out[k] = dup(o[k]);
 	return out;

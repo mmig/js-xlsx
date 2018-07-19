@@ -1,8 +1,7 @@
 /* Parts enumerated in OPC spec, MS-XLSB and MS-XLSX */
 /* 12.3 Part Summary <SpreadsheetML> */
 /* 14.2 Part Summary <DrawingML> */
-/* [MS-XLSX] 2.1 Part Enumerations */
-/* [MS-XLSB] 2.1.7 Part Enumeration */
+/* [MS-XLSX] 2.1 Part Enumerations ; [MS-XLSB] 2.1.7 Part Enumeration */
 var ct2type/*{[string]:string}*/ = ({
 	/* Workbook */
 	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml": "workbooks",
@@ -180,7 +179,7 @@ var CT_LIST = (function(){
 			xlsb: "application/vnd.ms-excel.styles"
 		}
 	};
-	keys(o).forEach(function(k) { if(!o[k].xlsm) o[k].xlsm = o[k].xlsx; });
+	keys(o).forEach(function(k) { ["xlsm", "xlam"].forEach(function(v) { if(!o[k][v]) o[k][v] = o[k].xlsx; }); });
 	keys(o).forEach(function(k){ keys(o[k]).forEach(function(v) { ct2type[o[k][v]] = k; }); });
 	return o;
 })();
@@ -198,7 +197,7 @@ function new_ct()/*:any*/ {
 		TODO:[], xmlns: "" }/*:any*/);
 }
 
-function parse_ct(data/*:?string*/, opts) {
+function parse_ct(data/*:?string*/) {
 	var ct = new_ct();
 	if(!data || !data.match) return ct;
 	var ctext = {};

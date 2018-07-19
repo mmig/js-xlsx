@@ -2,7 +2,7 @@
 /* vim: set ts=2 ft=javascript: */
 
 /* original data */
-let data: any[][] = [
+const data: any[][] = [
 	[1, 2, 3],
 	[true, false, null, "sheetjs"],
 	["foo    bar", "baz", new Date("2014-02-19T14:30Z"), "0.3"],
@@ -13,7 +13,7 @@ let data: any[][] = [
 
 const ws_name = "SheetJS";
 
-let wscols: XLSX.ColInfo[] = [
+const wscols: XLSX.ColInfo[] = [
 	{wch: 6}, // "characters"
 	{wpx: 50}, // "pixels"
 	,
@@ -21,7 +21,7 @@ let wscols: XLSX.ColInfo[] = [
 ];
 
 /* At 96 PPI, 1 pt = 1 px */
-let wsrows: XLSX.RowInfo[] = [
+const wsrows: XLSX.RowInfo[] = [
 	{hpt: 12}, // "points"
 	{hpx: 16}, // "pixels"
 	,
@@ -47,7 +47,7 @@ let wb: XLSX.WorkBook = { SheetNames: <string[]>[], Sheets: {} };
 wb = XLSX.utils.book_new();
 
 /* convert an array of arrays in JS to a CSF spreadsheet */
-let ws: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet(data, {cellDates:true});
+const ws: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet(data, {cellDates:true});
 
 /* TEST: add worksheet to workbook */
 wb.SheetNames.push(ws_name);
@@ -95,6 +95,9 @@ XLSX.utils.cell_set_number_format(ws['C2'], custfmt);
 
 /* TEST: page margins */
 ws['!margins'] =  { left:1.0, right:1.0, top:1.0, bottom:1.0, header:0.5, footer:0.5 };
+
+/* TEST: merge cells */
+ws['!merges'] = [ XLSX.utils.decode_range("A6:C6") ];
 
 console.log("JSON Data:");
 console.log(XLSX.utils.sheet_to_json(ws, {header:1}));
@@ -153,10 +156,12 @@ const filenames: Array<[string]|[string, XLSX.WritingOptions]> = [
 	['sheetjs.xlsx', {bookSST:true}],
 	['sheetjs.xlsm'],
 	['sheetjs.xlsb'],
+	['sheetjs.xlam'],
 	['sheetjs.biff8.xls', {bookType:'xls'}],
 	['sheetjs.biff5.xls', {bookType:'biff5'}],
 	['sheetjs.biff2.xls', {bookType:'biff2'}],
 	['sheetjs.xml.xls', {bookType:'xlml'}],
+	['sheetjs.xla'],
 	['sheetjs.ods'],
 	['sheetjs.fods'],
 	['sheetjs.csv'],
@@ -172,7 +177,7 @@ const filenames: Array<[string]|[string, XLSX.WritingOptions]> = [
 
 filenames.forEach((r) => {
 		/* write file */
-		XLSX.writeFile(wb, r[0], r[1]);
+		XLSX.writeFile(wb, r[0], <XLSX.WritingOptions>r[1]);
 		/* test by reading back files */
 		XLSX.readFile(r[0]);
 });

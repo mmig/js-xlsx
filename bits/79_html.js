@@ -10,27 +10,27 @@ var HTML_ = (function() {
 		var i/*:number*/ = mtch.index, j/*:number*/ = mtch2 && mtch2.index || str.length;
 		var rows = split_regex(str.slice(i, j), /(:?<tr[^>]*>)/i, "<tr>");
 		var R = -1, C = 0, RS = 0, CS = 0;
-		var range = {s:{r:10000000, c:10000000},e:{r:0,c:0}};
-		var merges = [], midx = 0;
+		var range/*:Range*/ = {s:{r:10000000, c:10000000},e:{r:0,c:0}};
+		var merges/*:Array<Range>*/ = [];
 		for(i = 0; i < rows.length; ++i) {
 			var row = rows[i].trim();
-			var hd = row.substr(0,3).toLowerCase();
-			if(hd == "<tr") { ++R; C = 0; continue; }
-			if(hd != "<td") continue;
-			var cells = row.split(/<\/td>/i);
+			var hd = row.slice(0,3).toLowerCase();
+			if(hd == "<tr") { ++R; if(opts.sheetRows && opts.sheetRows <= R) { --R; break; } C = 0; continue; }
+			if(hd != "<td" && hd != "<th") continue;
+			var cells = row.split(/<\/t[dh]>/i);
 			for(j = 0; j < cells.length; ++j) {
 				var cell = cells[j].trim();
-				if(cell.substr(0,3).toLowerCase() != "<td") continue;
+				if(!cell.match(/<t[dh]/i)) continue;
 				var m = cell, cc = 0;
 				/* TODO: parse styles etc */
 				while(m.charAt(0) == "<" && (cc = m.indexOf(">")) > -1) m = m.slice(cc+1);
 				var tag = parsexmltag(cell.slice(0, cell.indexOf(">")));
 				CS = tag.colspan ? +tag.colspan : 1;
-				if((RS = +tag.rowspan)>0 || CS>1) merges.push({s:{r:R,c:C},e:{r:R + (RS||1) - 1, c:C + CS - 1}});
+				if((RS = +tag.rowspan)>1 || CS>1) merges.push({s:{r:R,c:C},e:{r:R + (RS||1) - 1, c:C + CS - 1}});
 				var _t/*:string*/ = tag.t || "";
 				/* TODO: generate stub cells */
 				if(!m.length) { C += CS; continue; }
-				m = htmldecode(unescapexml(m));
+				m = htmldecode(m);
 				if(range.s.r > R) range.s.r = R; if(range.e.r < R) range.e.r = R;
 				if(range.s.c > C) range.s.c = C; if(range.e.c < C) range.e.c = C;
 				if(!m.length) continue;
@@ -56,8 +56,8 @@ var HTML_ = (function() {
 		return sheet_to_workbook(html_to_sheet(str, opts), opts);
 	}
 	function make_html_row(ws/*:Worksheet*/, r/*:Range*/, R/*:number*/, o/*:Sheet2HTMLOpts*/)/*:string*/ {
-		var M = (ws['!merges'] ||[]);
-		var oo = [];
+		var M/*:Array<Range>*/ = (ws['!merges'] ||[]);
+		var oo/*:Array<string>*/ = [];
 		var nullcell = "<td>" + (o.editable ? '<span contenteditable="true"></span>' : "" ) + "</td>";
 		for(var C = r.s.c; C <= r.e.c; ++C) {
 			var RS = 0, CS = 0;
@@ -85,12 +85,12 @@ var HTML_ = (function() {
 		return preamble + oo.join("") + "</tr>";
 	}
 	function make_html_preamble(ws/*:Worksheet*/, R/*:Range*/, o/*:Sheet2HTMLOpts*/)/*:string*/ {
-		var out = [];
-		return out.join("") + '<table>';
+		var out/*:Array<string>*/ = [];
+		return out.join("") + '<table' + (o && o.id ? ' id="' + o.id + '"' : "") + '>';
 	}
 	var _BEGIN = '<html><head><meta charset="utf-8"/><title>SheetJS Table Export</title></head><body>';
 	var _END = '</body></html>';
-	function sheet_to_html(ws/*:Worksheet*/, opts/*:?Sheet2HTMLOpts*/, wb/*:?Workbook*/)/*:string*/ {
+	function sheet_to_html(ws/*:Worksheet*/, opts/*:?Sheet2HTMLOpts*//*, wb:?Workbook*/)/*:string*/ {
 		var o = opts || {};
 		var header = o.header != null ? o.header : _BEGIN;
 		var footer = o.footer != null ? o.footer : _END;
@@ -118,17 +118,25 @@ function parse_dom_table(table/*:HTMLElement*/, _opts/*:?any*/)/*:Worksheet*/ {
 	var opts = _opts || {};
 	if(DENSE != null) opts.dense = DENSE;
 	var ws/*:Worksheet*/ = opts.dense ? ([]/*:any*/) : ({}/*:any*/);
-	var rows = table.getElementsByTagName('tr');
-	var range = {s:{r:0,c:0},e:{r:rows.length - 1,c:0}};
-	var merges = [], midx = 0;
-	var R = 0, _C = 0, C = 0, RS = 0, CS = 0;
-	for(; R < rows.length; ++R) {
-		var row = rows[R];
-		var elts = row.children;
+	var rows/*:HTMLCollection<HTMLTableRowElement>*/ = table.getElementsByTagName('tr');
+	var sheetRows = opts.sheetRows || 10000000;
+	var range/*:Range*/ = {s:{r:0,c:0},e:{r:0,c:0}};
+	var merges/*:Array<Range>*/ = [], midx = 0;
+	var rowinfo/*:Array<RowInfo>*/ = [];
+	var _R = 0, R = 0, _C, C, RS, CS;
+	for(; _R < rows.length && R < sheetRows; ++_R) {
+		var row/*:HTMLTableRowElement*/ = rows[_R];
+		if (is_dom_element_hidden(row)) {
+			if (opts.display) continue;
+			rowinfo[R] = {hidden: true};
+		}
+		var elts/*:HTMLCollection<HTMLTableCellElement>*/ = (row.children/*:any*/);
 		for(_C = C = 0; _C < elts.length; ++_C) {
-			var elt = elts[_C], v = htmldecode(elts[_C].innerHTML);
+			var elt/*:HTMLTableCellElement*/ = elts[_C];
+			if (opts.display && is_dom_element_hidden(elt)) continue;
+			var v/*:string*/ = htmldecode(elt.innerHTML);
 			for(midx = 0; midx < merges.length; ++midx) {
-				var m = merges[midx];
+				var m/*:Range*/ = merges[midx];
 				if(m.s.c == C && m.s.r <= R && R <= m.e.r) { C = m.e.c+1; midx = -1; }
 			}
 			/* TODO: figure out how to extract nonstandard mso- style */
@@ -153,12 +161,33 @@ function parse_dom_table(table/*:HTMLElement*/, _opts/*:?any*/)/*:Worksheet*/ {
 			if(range.e.c < C) range.e.c = C;
 			C += CS;
 		}
+		++R;
 	}
-	ws['!merges'] = merges;
+	if(merges.length) ws['!merges'] = merges;
+	if(rowinfo.length) ws['!rows'] = rowinfo;
+	range.e.r = R - 1;
 	ws['!ref'] = encode_range(range);
+	if(R >= sheetRows) ws['!fullref'] = encode_range((range.e.r = rows.length-_R+R-1,range)); // We can count the real number of rows to parse but we don't to improve the performance
 	return ws;
 }
 
 function table_to_book(table/*:HTMLElement*/, opts/*:?any*/)/*:Workbook*/ {
 	return sheet_to_workbook(parse_dom_table(table, opts), opts);
+}
+
+function is_dom_element_hidden(element/*:HTMLElement*/)/*:boolean*/ {
+	var display/*:string*/ = '';
+	var get_computed_style/*:?function*/ = get_get_computed_style_function(element);
+	if(get_computed_style) display = get_computed_style(element).getPropertyValue('display');
+	if(!display) display = element.style.display; // Fallback for cases when getComputedStyle is not available (e.g. an old browser or some Node.js environments) or doesn't work (e.g. if the element is not inserted to a document)
+	return display === 'none';
+}
+
+/* global getComputedStyle */
+function get_get_computed_style_function(element/*:HTMLElement*/)/*:?function*/ {
+	// The proper getComputedStyle implementation is the one defined in the element window
+	if(element.ownerDocument.defaultView && typeof element.ownerDocument.defaultView.getComputedStyle === 'function') return element.ownerDocument.defaultView.getComputedStyle;
+	// If it is not available, try to get one from the global namespace
+	if(typeof getComputedStyle === 'function') return getComputedStyle;
+	return null;
 }

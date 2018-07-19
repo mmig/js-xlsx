@@ -1,7 +1,7 @@
 /* xlsx.js (C) 2013-present  SheetJS -- http://sheetjs.com */
-require(["xlsx-shim"], function(XLSX) {
-console.log(XLSX);
-var X = XLSX;
+require(["xlsx"], function(XLSX2) {
+console.log(XLSX2);
+var X = XLSX2;
 
 var global_wb;
 
@@ -54,7 +54,7 @@ var process_wb = (function() {
 	var to_html = function to_html(workbook) {
 		HTMLOUT.innerHTML = "";
 		workbook.SheetNames.forEach(function(sheetName) {
-			var htmlstr = X.write(workbook, {sheet:sheetName, type:'binary', bookType:'html'});
+			var htmlstr = X.write(workbook, {sheet:sheetName, type:'string', bookType:'html'});
 			HTMLOUT.innerHTML += htmlstr;
 		});
 		return "";

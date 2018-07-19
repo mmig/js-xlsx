@@ -17,22 +17,22 @@ function safe_parse_sheet(zip, path/*:string*/, relsPath/*:string*/, sheet, idx/
 	try {
 		sheetRels[sheet]=parse_rels(getzipstr(zip, relsPath, true), path);
 		var data = getzipdata(zip, path);
+		var _ws;
 		switch(stype) {
-			case 'sheet': sheets[sheet]=parse_ws(data, path, idx, opts, sheetRels[sheet], wb, themes, styles); break;
-			case 'chart':
-				var cs = parse_cs(data, path, idx, opts, sheetRels[sheet], wb, themes, styles);
-				sheets[sheet] = cs;
-				if(!cs || !cs['!chart']) break;
-				var dfile = resolve_path(cs['!chart'].Target, path);
+			case 'sheet':  _ws = parse_ws(data, path, idx, opts, sheetRels[sheet], wb, themes, styles); break;
+			case 'chart':  _ws = parse_cs(data, path, idx, opts, sheetRels[sheet], wb, themes, styles);
+				if(!_ws || !_ws['!chart']) break;
+				var dfile = resolve_path(_ws['!chart'].Target, path);
 				var drelsp = get_rels_path(dfile);
 				var draw = parse_drawing(getzipstr(zip, dfile, true), parse_rels(getzipstr(zip, drelsp, true), dfile));
 				var chartp = resolve_path(draw, dfile);
 				var crelsp = get_rels_path(chartp);
-				cs = parse_chart(getzipstr(zip, chartp, true), chartp, opts, parse_rels(getzipstr(zip, crelsp, true), chartp), wb, cs);
+				_ws = parse_chart(getzipstr(zip, chartp, true), chartp, opts, parse_rels(getzipstr(zip, crelsp, true), chartp), wb, _ws);
 				break;
-			case 'macro': sheets[sheet]=parse_ms(data, path, idx, opts, sheetRels[sheet], wb, themes, styles); break;
-			case 'dialog': sheets[sheet]=parse_ds(data, path, idx, opts, sheetRels[sheet], wb, themes, styles); break;
+			case 'macro':  _ws = parse_ms(data, path, idx, opts, sheetRels[sheet], wb, themes, styles); break;
+			case 'dialog': _ws = parse_ds(data, path, idx, opts, sheetRels[sheet], wb, themes, styles); break;
 		}
+		sheets[sheet] = _ws;
 	} catch(e) { if(opts.WTF) throw e; }
 }
 
@@ -79,14 +79,12 @@ function safe_parse_drawing_images(zip, path, relsPath, sheet, sheetRels, sheets
 	} catch(e) { if(opts.WTF) throw e; }
 }
 
-var nodirs = function nodirs(x/*:string*/)/*:boolean*/{return x.slice(-1) != '/';};
 function strip_front_slash(x/*:string*/)/*:string*/ { return x.charAt(0) == '/' ? x.slice(1) : x; }
 
 function parse_zip(zip/*:ZIP*/, opts/*:?ParseOpts*/)/*:Workbook*/ {
 	make_ssf(SSF);
 	opts = opts || {};
 	fix_read_opts(opts);
-	reset_cp();
 
 	/* OpenDocument Part 3 Section 2.2.1 OpenDocument Package */
 	if(safegetzipfile(zip, 'META-INF/manifest.xml')) return parse_ods(zip, opts);
@@ -95,8 +93,8 @@ function parse_zip(zip/*:ZIP*/, opts/*:?ParseOpts*/)/*:Workbook*/ {
 	/* Numbers */
 	if(safegetzipfile(zip, 'Index/Document.iwa')) throw new Error('Unsupported NUMBERS file');
 
-	var entries = keys(zip.files).filter(nodirs).sort();
-	var dir = parse_ct((getzipstr(zip, '[Content_Types].xml')/*:?any*/), opts);
+	var entries = zipentries(zip);
+	var dir = parse_ct((getzipstr(zip, '[Content_Types].xml')/*:?any*/));
 	var xlsb = false;
 	var sheets, binname;
 	if(dir.workbooks.length === 0) {
@@ -110,20 +108,19 @@ function parse_zip(zip/*:ZIP*/, opts/*:?ParseOpts*/)/*:Workbook*/ {
 		xlsb = true;
 	}
 	if(dir.workbooks[0].slice(-3) == "bin") xlsb = true;
-	if(xlsb) set_cp(1200);
 
 	var themes = ({}/*:any*/);
 	var styles = ({}/*:any*/);
 	if(!opts.bookSheets && !opts.bookProps) {
 		strs = [];
-		if(dir.sst) strs=parse_sst(getzipdata(zip, strip_front_slash(dir.sst)), dir.sst, opts);
+		if(dir.sst) try { strs=parse_sst(getzipdata(zip, strip_front_slash(dir.sst)), dir.sst, opts); } catch(e) { if(opts.WTF) throw e; }
 
 		if(opts.cellStyles && dir.themes.length) themes = parse_theme(getzipstr(zip, dir.themes[0].replace(/^\//,''), true)||"",dir.themes[0], opts);
 
 		if(dir.style) styles = parse_sty(getzipdata(zip, strip_front_slash(dir.style)), dir.style, themes, opts);
 	}
 
-	var externbooks = dir.links.map(function(link) {
+	/*var externbooks = */dir.links.map(function(link) {
 		return parse_xlink(getzipdata(zip, strip_front_slash(link)), link, opts);
 	});
 
@@ -175,15 +172,20 @@ function parse_zip(zip/*:ZIP*/, opts/*:?ParseOpts*/)/*:Workbook*/ {
 	}
 
 	var wbext = xlsb ? "bin" : "xml";
-	var wbrelsfile = 'xl/_rels/workbook.' + wbext + '.rels';
+	var wbrelsi = dir.workbooks[0].lastIndexOf("/");
+	var wbrelsfile = (dir.workbooks[0].slice(0, wbrelsi+1) + "_rels/" + dir.workbooks[0].slice(wbrelsi+1) + ".rels").replace(/^\//,"");
+	if(!safegetzipfile(zip, wbrelsfile)) wbrelsfile = 'xl/_rels/workbook.' + wbext + '.rels';
 	var wbrels = parse_rels(getzipstr(zip, wbrelsfile, true), wbrelsfile);
 	if(wbrels) wbrels = safe_parse_wbrels(wbrels, wb.Sheets);
+
 	/* Numbers iOS hack */
 	var nmode = (getzipdata(zip,"xl/worksheets/sheet.xml",true))?1:0;
 	for(i = 0; i != props.Worksheets; ++i) {
 		var stype = "sheet";
 		if(wbrels && wbrels[i]) {
 			path = 'xl/' + (wbrels[i][1]).replace(/[\/]?xl\//, "");
+			if(!safegetzipfile(zip, path)) path = wbrels[i][1];
+			if(!safegetzipfile(zip, path)) path = wbrelsfile.replace(/_rels\/.*$/,"") + wbrels[i][1];
 			stype = wbrels[i][2];
 		} else {
 			path = 'xl/worksheets/sheet'+(i+1-nmode)+"." + wbext;
@@ -214,7 +216,7 @@ function parse_zip(zip/*:ZIP*/, opts/*:?ParseOpts*/)/*:Workbook*/ {
 	}
 	if(opts.bookVBA) {
 		if(dir.vba.length > 0) out.vbaraw = getzipdata(zip,strip_front_slash(dir.vba[0]),true);
-		else if(dir.defaults && dir.defaults.bin === 'application/vnd.ms-office.vbaProject') out.vbaraw = getzipdata(zip,'xl/vbaProject.bin',true);
+		else if(dir.defaults && dir.defaults.bin === CT_VBA) out.vbaraw = getzipdata(zip, 'xl/vbaProject.bin',true);
 	}
 	/* FEATURE[russa]: parse drawings/images */
 	if(opts.bookImages){
@@ -229,9 +231,11 @@ function parse_zip(zip/*:ZIP*/, opts/*:?ParseOpts*/)/*:Workbook*/ {
 /* [MS-OFFCRYPTO] 2.1.1 */
 function parse_xlsxcfb(cfb, _opts/*:?ParseOpts*/)/*:Workbook*/ {
 	var opts = _opts || {};
-	var f = '/!DataSpaces/Version';
-	var data = CFB.find(cfb, f); if(!data || !data.content) throw new Error("ECMA-376 Encrypted file missing " + f);
-	var version = parse_DataSpaceVersionInfo(data.content);
+	var f = 'Workbook', data = CFB.find(cfb, f);
+	try {
+	f = '/!DataSpaces/Version';
+	data = CFB.find(cfb, f); if(!data || !data.content) throw new Error("ECMA-376 Encrypted file missing " + f);
+	/*var version = */parse_DataSpaceVersionInfo(data.content);
 
 	/* 2.3.4.1 */
 	f = '/!DataSpaces/DataSpaceMap';
@@ -250,7 +254,8 @@ function parse_xlsxcfb(cfb, _opts/*:?ParseOpts*/)/*:Workbook*/ {
 	/* 2.3.4.3 */
 	f = '/!DataSpaces/TransformInfo/StrongEncryptionTransform/!Primary';
 	data = CFB.find(cfb, f); if(!data || !data.content) throw new Error("ECMA-376 Encrypted file missing " + f);
-	var hdr = parse_Primary(data.content);
+	/*var hdr = */parse_Primary(data.content);
+	} catch(e) {}
 
 	f = '/EncryptionInfo';
 	data = CFB.find(cfb, f); if(!data || !data.content) throw new Error("ECMA-376 Encrypted file missing " + f);
@@ -260,8 +265,10 @@ function parse_xlsxcfb(cfb, _opts/*:?ParseOpts*/)/*:Workbook*/ {
 	f = '/EncryptedPackage';
 	data = CFB.find(cfb, f); if(!data || !data.content) throw new Error("ECMA-376 Encrypted file missing " + f);
 
+/*global decrypt_agile */
 /*:: declare var decrypt_agile:any; */
 	if(einfo[0] == 0x04 && typeof decrypt_agile !== 'undefined') return decrypt_agile(einfo[1], data.content, opts.password || "", opts);
+/*global decrypt_std76 */
 /*:: declare var decrypt_std76:any; */
 	if(einfo[0] == 0x02 && typeof decrypt_std76 !== 'undefined') return decrypt_std76(einfo[1], data.content, opts.password || "", opts);
 	throw new Error("File is password-protected");

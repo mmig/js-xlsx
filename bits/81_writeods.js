@@ -14,7 +14,7 @@ var write_styles_ods/*:{(wb:any, opts:any):string}*/ = (function() {
 		'xmlns:of':       "urn:oasis:names:tc:opendocument:xmlns:of:1.2",
 		'office:version': "1.2"
 	}) + '></office:document-styles>';
-	return function wso(wb, opts) {
+	return function wso(/*::wb, opts*/) {
 		return XML_HEADER + payload;
 	};
 })();
@@ -30,12 +30,12 @@ var write_content_ods/*:{(wb:any, opts:any):string}*/ = (function() {
 
 	var null_cell_xml = '          <table:table-cell />\n';
 	var covered_cell_xml = '          <table:covered-table-cell/>\n';
-	var write_ws = function(ws, wb/*:Workbook*/, i/*:number*/, opts)/*:string*/ {
+	var write_ws = function(ws, wb/*:Workbook*/, i/*:number*//*::, opts*/)/*:string*/ {
 		/* Section 9 Tables */
-		var o = [];
+		var o/*:Array<string>*/ = [];
 		o.push('      <table:table table:name="' + escapexml(wb.SheetNames[i]) + '">\n');
 		var R=0,C=0, range = decode_range(ws['!ref']);
-		var marr = ws['!merges'] || [], mi = 0;
+		var marr/*:Array<Range>*/ = ws['!merges'] || [], mi = 0;
 		var dense = Array.isArray(ws);
 		for(R = 0; R < range.s.r; ++R) o.push('        <table:table-row></table:table-row>\n');
 		for(; R <= range.e.r; ++R) {
@@ -58,7 +58,7 @@ var write_content_ods/*:{(wb:any, opts:any):string}*/ = (function() {
 				if(cell && cell.f) {
 					ct['table:formula'] = escapexml(csf_to_ods_formula(cell.f));
 					if(cell.F) {
-						if(cell.F.substr(0, ref.length) == ref) {
+						if(cell.F.slice(0, ref.length) == ref) {
 							var _Fref = decode_range(cell.F);
 							ct['table:number-matrix-columns-spanned'] = (_Fref.e.c - _Fref.s.c + 1);
 							ct['table:number-matrix-rows-spanned'] =    (_Fref.e.r - _Fref.s.r + 1);
@@ -186,7 +186,7 @@ function write_ods(wb/*:any*/, opts/*:any*/) {
 	var f = "";
 
 	var manifest/*:Array<Array<string> >*/ = [];
-	var rdf = [];
+	var rdf/*:Array<[string, string]>*/ = [];
 
 	/* Part 3 Section 3.3 MIME Media Type */
 	f = "mimetype";
@@ -206,18 +206,18 @@ function write_ods(wb/*:any*/, opts/*:any*/) {
 
 	/* TODO: this is hard-coded to satiate excel */
 	f = "meta.xml";
-	zip.file(f, write_meta_ods(wb, opts));
+	zip.file(f, write_meta_ods(/*::wb, opts*/));
 	manifest.push([f, "text/xml"]);
 	rdf.push([f, "MetadataFile"]);
 
 	/* Part 3 Section 6 Metadata Manifest File */
 	f = "manifest.rdf";
-	zip.file(f, write_rdf(rdf, opts));
+	zip.file(f, write_rdf(rdf/*, opts*/));
 	manifest.push([f, "application/rdf+xml"]);
 
 	/* Part 3 Section 4 Manifest File */
 	f = "META-INF/manifest.xml";
-	zip.file(f, write_manifest(manifest, opts));
+	zip.file(f, write_manifest(manifest/*, opts*/));
 
 	return zip;
 }

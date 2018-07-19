@@ -5,25 +5,25 @@ function parse_compobj(obj/*:CFBEntry*/) {
 	/*:: if(o == null) return; */
 
 	/* [MS-OLEDS] 2.3.7 CompObjHeader -- All fields MUST be ignored */
-	var l = 28, m;
-	m = __lpstr(o, l);
-	l += 4 + __readUInt32LE(o,l);
-	v.UserType = m;
+	o.l = 28;
 
-	/* [MS-OLEDS] 2.3.1 ClipboardFormatOrAnsiString */
-	m = __readUInt32LE(o,l); l+= 4;
-	switch(m) {
-		case 0x00000000: break;
-		case 0xffffffff: case 0xfffffffe: l+=4; break;
-		default:
-			if(m > 0x190) throw new Error("Unsupported Clipboard: " + m.toString(16));
-			l += m;
-	}
+	v.AnsiUserType = o.read_shift(0, "lpstr-ansi");
+	v.AnsiClipboardFormat = parse_ClipboardFormatOrAnsiString(o);
 
-	m = __lpstr(o, l); l += m.length === 0 ? 0 : 5 + m.length; v.Reserved1 = m;
+	if(o.length - o.l <= 4) return v;
 
-	if((m = __readUInt32LE(o,l)) !== 0x71b2e9f4) return v;
-	throw new Error("Unsupported Unicode Extension");
+	var m/*:number*/ = o.read_shift(4);
+	if(m == 0 || m > 40) return v;
+	o.l-=4; v.Reserved1 = o.read_shift(0, "lpstr-ansi");
+
+	if(o.length - o.l <= 4) return v;
+	m = o.read_shift(4);
+	if(m !== 0x71b239f4) return v;
+	v.UnicodeClipboardFormat = parse_ClipboardFormatOrUnicodeString(o);
+
+	m = o.read_shift(4);
+	if(m == 0 || m > 40) return v;
+	o.l-=4; v.Reserved2 = o.read_shift(0, "lpwstr");
 }
 
 /*
@@ -99,21 +99,20 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 	if(DENSE != null && options.dense == null) options.dense = DENSE;
 	var out/*:Worksheet*/ = ((options.dense ? [] : {})/*:any*/);
 	var Directory = {};
-	var found_sheet = false;
 	var range/*:Range*/ = ({}/*:any*/);
 	var last_formula = null;
-	var sst = [];
+	var sst/*:SST*/ = ([]/*:any*/);
 	var cur_sheet = "";
 	var Preamble = {};
-	var lastcell, last_cell = "", cc, cmnt, rng, rngC, rngR;
-	var shared_formulae = {};
-	var array_formulae = []; /* TODO: something more clever */
+	var lastcell, last_cell = "", cc, cmnt, rngC, rngR;
+	var sharedf = {};
+	var arrayf/*:Array<[Range, string]>*/ = [];
 	var temp_val/*:Cell*/;
 	var country;
 	var cell_valid = true;
 	var XFs = []; /* XF records */
 	var palette = [];
-	var Workbook/*:WBWBProps*/ = ({ Sheets:[], WBProps:{date1904:false} }/*:any*/), wsprops = {};
+	var Workbook/*:WBWBProps*/ = ({ Sheets:[], WBProps:{date1904:false}, Views:[{}] }/*:any*/), wsprops = {};
 	var get_rgb = function getrgb(icv) {
 		if(icv < 8) return XLSIcv[icv];
 		if(icv < 64) return palette[icv-8] || XLSIcv[icv];
@@ -130,6 +129,7 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 	};
 	var addcell = function addcell(cell/*:any*/, line/*:any*/, options/*:any*/) {
 		if(file_depth > 1) return;
+		if(options.sheetRows && cell.r >= options.sheetRows) cell_valid = false;
 		if(!cell_valid) return;
 		if(options.cellStyles && line.XF && line.XF.data) process_cell_style(cell, line, options);
 		delete line.ixfe; delete line.XF;
@@ -144,20 +144,16 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 			if(cell.c + 1 > range.e.c) range.e.c = cell.c + 1;
 		}
 		if(options.cellFormula && line.f) {
-			for(var afi = 0; afi < array_formulae.length; ++afi) {
-				if(array_formulae[afi][0].s.c > cell.c) continue;
-				if(array_formulae[afi][0].s.r > cell.r) continue;
-				if(array_formulae[afi][0].e.c < cell.c) continue;
-				if(array_formulae[afi][0].e.r < cell.r) continue;
-				line.F = encode_range(array_formulae[afi][0]);
-				if(array_formulae[afi][0].s.c != cell.c) delete line.f;
-				if(array_formulae[afi][0].s.r != cell.r) delete line.f;
-				if(line.f) line.f = "" + stringify_formula(array_formulae[afi][1], range, cell, supbooks, opts);
+			for(var afi = 0; afi < arrayf.length; ++afi) {
+				if(arrayf[afi][0].s.c > cell.c || arrayf[afi][0].s.r > cell.r) continue;
+				if(arrayf[afi][0].e.c < cell.c || arrayf[afi][0].e.r < cell.r) continue;
+				line.F = encode_range(arrayf[afi][0]);
+				if(arrayf[afi][0].s.c != cell.c || arrayf[afi][0].s.r != cell.r) delete line.f;
+				if(line.f) line.f = "" + stringify_formula(arrayf[afi][1], range, cell, supbooks, opts);
 				break;
 			}
 		}
-		if(options.sheetRows && lastcell.r >= options.sheetRows) cell_valid = false;
-		else {
+		{
 			if(options.dense) {
 				if(!out[cell.r]) out[cell.r] = [];
 				out[cell.r][cell.c] = line;
@@ -168,8 +164,8 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 		enc: false, // encrypted
 		sbcch: 0, // cch in the preceding SupBook
 		snames: [], // sheetnames
-		sharedf: shared_formulae, // shared formulae by address
-		arrayf: array_formulae, // array formulae array
+		sharedf: sharedf, // shared formulae by address
+		arrayf: arrayf, // array formulae array
 		rrtabid: [], // RRTabId
 		lastuser: "", // Last User from WriteAccess
 		biff: 8, // BIFF version
@@ -179,9 +175,11 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 		WTF: !!options && !!options.wtf
 	}/*:any*/);
 	if(options.password) opts.password = options.password;
-	var mergecells = [];
+	var themes;
+	var merges/*:Array<Range>*/ = [];
 	var objects = [];
-	var colinfo = [], rowinfo = [];
+	var colinfo/*:Array<ColInfo>*/ = [], rowinfo/*:Array<RowInfo>*/ = [];
+	// eslint-disable-next-line no-unused-vars
 	var defwidth = 0, defheight = 0; // twips / MDW respectively
 	var seencol = false;
 	var supbooks = ([]/*:any*/); // 1-indexed, will hold extern names
@@ -192,8 +190,7 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 	supbooks.XTI = [];
 	var last_Rn = '';
 	var file_depth = 0; /* TODO: make a real stack */
-	var BIFF2Fmt = 0;
-	var BIFF2FmtTable/*:Array<string>*/ = [];
+	var BIFF2Fmt = 0, BIFF2FmtTable/*:Array<string>*/ = [];
 	var FilterDatabases = []; /* TODO: sort out supbooks and process elsewhere */
 	var last_lbl/*:?DefinedName*/;
 
@@ -205,7 +202,7 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 		var s = blob.l;
 		var RecordType = blob.read_shift(2);
 		if(RecordType === 0 && last_Rn === 'EOF') break;
-		var length = (blob.l === blob.length ? 0 : blob.read_shift(2)), y;
+		var length = (blob.l === blob.length ? 0 : blob.read_shift(2));
 		var R = XLSRecordEnum[RecordType];
 		//console.log(RecordType.toString(16), RecordType, R, blob.l, length, blob.length);
 		//if(!R) console.log(blob.slice(blob.l, blob.l + length));
@@ -216,7 +213,7 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 			last_Rn = R.n;
 			if(R.r === 2 || R.r == 12) {
 				var rt = blob.read_shift(2); length -= 2;
-				if(!opts.enc && rt !== RecordType) throw new Error("rt mismatch: " + rt + "!=" + RecordType);
+				if(!opts.enc && rt !== RecordType && (((rt&0xFF)<<8)|(rt>>8)) !== RecordType) throw new Error("rt mismatch: " + rt + "!=" + RecordType);
 				if(R.r == 12){ blob.l += 10; length -= 10; } // skip FRT
 			}
 			//console.error(R,blob.l,length,blob.length);
@@ -224,6 +221,7 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 			if(R.n === 'EOF') val = R.f(blob, length, opts);
 			else val = slurp(R, blob, length, opts);
 			var Rn = R.n;
+			if(file_depth == 0 && Rn != 'BOF') continue;
 			/* nested switch statements to workaround V8 128 limit */
 			switch(Rn) {
 				/* Workbook Options */
@@ -234,7 +232,6 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 				case 'FilePass':
 					if(!opts.enc) blob.l = 0;
 					opts.enc = val;
-					if(opts.WTF) console.error(val);
 					if(!options.password) throw new Error("File is password-protected");
 					if(val.valid == null) throw new Error("Encryption scheme unsupported");
 					if(!val.valid) throw new Error("Password is incorrect");
@@ -254,16 +251,17 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 				case 'RRTabId': opts.rrtabid = val; break;
 				case 'WinProtect': opts.winlocked = val; break;
 				case 'Template': break; // TODO
-				case 'RefreshAll': wb.opts.RefreshAll = val; break;
 				case 'BookBool': break; // TODO
 				case 'UsesELFs': break;
 				case 'MTRSettings': break;
-				case 'CalcCount': wb.opts.CalcCount = val; break;
-				case 'CalcDelta': wb.opts.CalcDelta = val; break;
-				case 'CalcIter': wb.opts.CalcIter = val; break;
-				case 'CalcMode': wb.opts.CalcMode = val; break;
-				case 'CalcPrecision': wb.opts.CalcPrecision = val; break;
-				case 'CalcSaveRecalc': wb.opts.CalcSaveRecalc = val; break;
+				case 'RefreshAll':
+				case 'CalcCount':
+				case 'CalcDelta':
+				case 'CalcIter':
+				case 'CalcMode':
+				case 'CalcPrecision':
+				case 'CalcSaveRecalc':
+					wb.opts[Rn] = val; break;
 				case 'CalcRefMode': opts.CalcRefMode = val; break; // TODO: implement R1C1
 				case 'Uncalced': break;
 				case 'ForceFullCalculation': wb.opts.FullCalc = val; break;
@@ -291,7 +289,7 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 					}/*:DefinedName*/);
 					if(val.itab > 0) last_lbl.Sheet = val.itab - 1;
 					supbooks.names.push(last_lbl);
-					if(!supbooks[0]) supbooks[0] = [];
+					if(!supbooks[0]) { supbooks[0] = []; supbooks[0].XTI = []; }
 					supbooks[supbooks.length-1].push(val);
 					if(val.Name == "_xlnm._FilterDatabase" && val.itab > 0)
 						if(val.rgce && val.rgce[0] && val.rgce[0][0] && val.rgce[0][0][0] == 'PtgArea3d')
@@ -321,9 +319,16 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 						if(range.e.r > 0 && range.e.c > 0) {
 							range.e.r--; range.e.c--;
 							out["!ref"] = encode_range(range);
+							if(options.sheetRows && options.sheetRows <= range.e.r) {
+								var tmpri = range.e.r;
+								range.e.r = options.sheetRows - 1;
+								out["!fullref"] = out["!ref"];
+								out["!ref"] = encode_range(range);
+								range.e.r = tmpri;
+							}
 							range.e.r++; range.e.c++;
 						}
-						if(mergecells.length > 0) out["!merges"] = mergecells;
+						if(merges.length > 0) out["!merges"] = merges;
 						if(objects.length > 0) out["!objects"] = objects;
 						if(colinfo.length > 0) out["!cols"] = colinfo;
 						if(rowinfo.length > 0) out["!rows"] = rowinfo;
@@ -333,16 +338,19 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 					out = ((options.dense ? [] : {})/*:any*/);
 				} break;
 				case 'BOF': {
-					if(opts.biff === 8) switch(RecordType) {
-						case 0x0009: opts.biff = 2; break;
-						case 0x0209: opts.biff = 3; break;
-						case 0x0409: opts.biff = 4; break;
-						default: switch(val.BIFFVer) {
-						case 0x0500: opts.biff = 5; break;
-						case 0x0600: opts.biff = 8; break;
-						case 0x0002: opts.biff = 2; break;
-						case 0x0007: opts.biff = 2; break;
-					}}
+					if(opts.biff === 8) opts.biff = {
+						/*::[*/0x0009/*::]*/:2,
+						/*::[*/0x0209/*::]*/:3,
+						/*::[*/0x0409/*::]*/:4
+					}[RecordType] || {
+						/*::[*/0x0200/*::]*/:2,
+						/*::[*/0x0300/*::]*/:3,
+						/*::[*/0x0400/*::]*/:4,
+						/*::[*/0x0500/*::]*/:5,
+						/*::[*/0x0600/*::]*/:8,
+						/*::[*/0x0002/*::]*/:2,
+						/*::[*/0x0007/*::]*/:2
+					}[val.BIFFVer] || 8;
 					if(file_depth++) break;
 					cell_valid = true;
 					out = ((options.dense ? [] : {})/*:any*/);
@@ -359,9 +367,9 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 					else cur_sheet = (Directory[s] || {name:""}).name;
 					if(val.dt == 0x20) out["!type"] = "chart";
 					if(val.dt == 0x40) out["!type"] = "macro";
-					mergecells = [];
+					merges = [];
 					objects = [];
-					array_formulae = []; opts.arrayf = array_formulae;
+					opts.arrayf = arrayf = [];
 					colinfo = []; rowinfo = [];
 					defwidth = defheight = 0;
 					seencol = false;
@@ -405,7 +413,7 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 						if(_f && _f[0] && _f[0][0] && _f[0][0][0] == 'PtgExp') {
 							var _fr = _f[0][0][1][0], _fc = _f[0][0][1][1];
 							var _fe = encode_cell({r:_fr, c:_fc});
-							if(shared_formulae[_fe]) temp_val.f = ""+stringify_formula(val.formula,range,val.cell,supbooks, opts);
+							if(sharedf[_fe]) temp_val.f = ""+stringify_formula(val.formula,range,val.cell,supbooks, opts);
 							else temp_val.F = ((options.dense ? (out[_fr]||[])[_fc]: out[_fe]) || {}).F;
 						} else temp_val.f = ""+stringify_formula(val.formula,range,val.cell,supbooks, opts);
 					}
@@ -429,7 +437,7 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 					} else throw new Error("String record expects Formula");
 				} break;
 				case 'Array': {
-					array_formulae.push(val);
+					arrayf.push(val);
 					var _arraystart = encode_cell(val[0].s);
 					cc = options.dense ? (out[val[0].s.r]||[])[val[0].s.c] : out[_arraystart];
 					if(options.cellFormula && cc) {
@@ -445,7 +453,7 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 					if(last_cell) {
 						/* TODO: capture range */
 						if(!last_formula) break; /* technically unreachable */
-						shared_formulae[encode_cell(last_formula.cell)]= val[0];
+						sharedf[encode_cell(last_formula.cell)]= val[0];
 						cc = options.dense ? (out[last_formula.cell.r]||[])[last_formula.cell.c] : out[encode_cell(last_formula.cell)];
 						(cc||{}).f = ""+stringify_formula(val[0], range, lastcell, supbooks, opts);
 					}
@@ -501,7 +509,7 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 					if(b2idx >= 163) SSF.load(val, BIFF2Fmt + 163);
 				} break;
 
-				case 'MergeCells': mergecells = mergecells.concat(val); break;
+				case 'MergeCells': merges = merges.concat(val); break;
 
 				case 'Obj': objects[val.cmo[0]] = opts.lastobj = val; break;
 				case 'TxO': opts.lastobj.TxO = val; break;
@@ -518,7 +526,7 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 					for(rngR = val[0].s.r; rngR <= val[0].e.r; ++rngR)
 						for(rngC = val[0].s.c; rngC <= val[0].e.c; ++rngC) {
 							cc = options.dense ? (out[rngR]||[])[rngC] : out[encode_cell({c:rngC,r:rngR})];
-							if(cc) cc.l.Tooltip = val[1];
+							if(cc && cc.l) cc.l.Tooltip = val[1];
 							}
 				} break;
 
@@ -572,6 +580,11 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 					out['!margins'].footer = val.footer;
 					break;
 
+				case 'Window2': // TODO
+					// $FlowIgnore
+					if(val.RTL) Workbook.Views[0].RTL = true;
+					break;
+
 				case 'Header': break; // TODO
 				case 'Footer': break; // TODO
 				case 'HCenter': break; // TODO
@@ -605,8 +618,8 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 				case 'XFCRC': break; // TODO
 				case 'Style': break; // TODO
 				case 'StyleExt': break; // TODO
-				case 'Palette': palette = val; break; // TODO
-				case 'Theme': break; // TODO
+				case 'Palette': palette = val; break;
+				case 'Theme': themes = val; break;
 				/* Protection */
 				case 'ScenarioProtect': break;
 				case 'ObjProtect': break;
@@ -710,7 +723,7 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 				case 'InterfaceHdr': case 'Mms': case 'InterfaceEnd': case 'DSF': break;
 				case 'BuiltInFnGroupCount': /* 2.4.30 0x0E or 0x10 but excel 2011 generates 0x11? */ break;
 				/* View Stuff */
-				case 'Window1': case 'Window2': case 'HideObj': case 'GridSet': case 'Guts':
+				case 'Window1': case 'HideObj': case 'GridSet': case 'Guts':
 				case 'UserBView': case 'UserSViewBegin': case 'UserSViewEnd':
 				case 'Pane': break;
 				default: switch(R.n) { /* nested */
@@ -814,16 +827,14 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 			}}}}
 		} else blob.l += length;
 	}
-	var sheetnamesraw = Object.keys(Directory).sort(function(a,b) { return Number(a) - Number(b); }).map(function(x){return Directory[x].name;});
-	var sheetnames = sheetnamesraw.slice();
-	wb.Directory=sheetnamesraw;
-	wb.SheetNames=sheetnamesraw;
+	wb.SheetNames=keys(Directory).sort(function(a,b) { return Number(a) - Number(b); }).map(function(x){return Directory[x].name;});
 	if(!options.bookSheets) wb.Sheets=Sheets;
 	if(wb.Sheets) FilterDatabases.forEach(function(r,i) { wb.Sheets[wb.SheetNames[i]]['!autofilter'] = r; });
 	wb.Preamble=Preamble;
 	wb.Strings = sst;
 	wb.SSF = SSF.get_table();
 	if(opts.enc) wb.Encryption = opts.enc;
+	if(themes) wb.Themes = themes;
 	wb.Metadata = {};
 	if(country !== undefined) wb.Metadata.Country = country;
 	if(supbooks.names.length > 0) Workbook.Names = supbooks.names;
@@ -831,31 +842,64 @@ function parse_workbook(blob, options/*:ParseOpts*/)/*:Workbook*/ {
 	return wb;
 }
 
-/* TODO: WTF */
-function parse_props(cfb/*:CFBContainer*/, props, o) {
+/* TODO: split props*/
+var PSCLSID = {
+	SI: "e0859ff2f94f6810ab9108002b27b3d9",
+	DSI: "02d5cdd59c2e1b10939708002b2cf9ae",
+	UDI: "05d5cdd59c2e1b10939708002b2cf9ae"
+};
+function parse_xls_props(cfb/*:CFBContainer*/, props, o) {
 	/* [MS-OSHARED] 2.3.3.2.2 Document Summary Information Property Set */
 	var DSI = CFB.find(cfb, '!DocumentSummaryInformation');
-	if(DSI) try {
-		var DocSummary = parse_PropertySetStream(DSI, DocSummaryPIDDSI);
+	if(DSI && DSI.size > 0) try {
+		var DocSummary = parse_PropertySetStream(DSI, DocSummaryPIDDSI, PSCLSID.DSI);
 		for(var d in DocSummary) props[d] = DocSummary[d];
-	} catch(e) {if(o.WTF == 2) throw e;/* empty */}
+	} catch(e) {if(o.WTF) throw e;/* empty */}
 
 	/* [MS-OSHARED] 2.3.3.2.1 Summary Information Property Set*/
 	var SI = CFB.find(cfb, '!SummaryInformation');
-	if(SI) try {
-		var Summary = parse_PropertySetStream(SI, SummaryPIDSI);
+	if(SI && SI.size > 0) try {
+		var Summary = parse_PropertySetStream(SI, SummaryPIDSI, PSCLSID.SI);
 		for(var s in Summary) if(props[s] == null) props[s] = Summary[s];
-	} catch(e) {if(o.WTF == 2) throw e;/* empty */}
+	} catch(e) {if(o.WTF) throw e;/* empty */}
+
+	if(props.HeadingPairs && props.TitlesOfParts) {
+		load_props_pairs(props.HeadingPairs, props.TitlesOfParts, props, o);
+		delete props.HeadingPairs; delete props.TitlesOfParts;
+	}
+}
+function write_xls_props(wb/*:Workbook*/, cfb/*:CFBContainer*/) {
+	var DSEntries = [], SEntries = [], CEntries = [];
+	var i = 0, Keys;
+	if(wb.Props) {
+		Keys = keys(wb.Props);
+		// $FlowIgnore
+		for(i = 0; i < Keys.length; ++i) (DocSummaryRE.hasOwnProperty(Keys[i]) ? DSEntries : SummaryRE.hasOwnProperty(Keys[i]) ? SEntries : CEntries).push([Keys[i], wb.Props[Keys[i]]]);
+	}
+	if(wb.Custprops) {
+		Keys = keys(wb.Custprops);
+		// $FlowIgnore
+		for(i = 0; i < Keys.length; ++i) if(!(wb.Props||{}).hasOwnProperty(Keys[i])) (DocSummaryRE.hasOwnProperty(Keys[i]) ? DSEntries : SummaryRE.hasOwnProperty(Keys[i]) ? SEntries : CEntries).push([Keys[i], wb.Custprops[Keys[i]]]);
+	}
+	var CEntries2 = [];
+	for(i = 0; i < CEntries.length; ++i) {
+		if(XLSPSSkip.indexOf(CEntries[i][0]) > -1) continue;
+		if(CEntries[i][1] == null) continue;
+		CEntries2.push(CEntries[i]);
+	}
+	if(SEntries.length) CFB.utils.cfb_add(cfb, "/\u0005SummaryInformation", write_PropertySetStream(SEntries, PSCLSID.SI, SummaryRE, SummaryPIDSI));
+	if(DSEntries.length || CEntries2.length) CFB.utils.cfb_add(cfb, "/\u0005DocumentSummaryInformation", write_PropertySetStream(DSEntries, PSCLSID.DSI, DocSummaryRE, DocSummaryPIDDSI, CEntries2.length ? CEntries2 : null, PSCLSID.UDI));
 }
 
 function parse_xlscfb(cfb/*:any*/, options/*:?ParseOpts*/)/*:Workbook*/ {
 if(!options) options = {};
 fix_read_opts(options);
 reset_cp();
-var CompObj/*:?CFBEntry*/, Summary, WB/*:?any*/;
+if(options.codepage) set_ansi(options.codepage);
+var CompObj/*:?CFBEntry*/, WB/*:?any*/;
 if(cfb.FullPaths) {
+	if(CFB.find(cfb, '/encryption')) throw new Error("File is password-protected");
 	CompObj = CFB.find(cfb, '!CompObj');
-	Summary = CFB.find(cfb, '!SummaryInformation');
 	WB = CFB.find(cfb, '/Workbook') || CFB.find(cfb, '/Book');
 } else {
 	switch(options.type) {
@@ -867,10 +911,10 @@ if(cfb.FullPaths) {
 	prep_blob(cfb, 0);
 	WB = ({content: cfb}/*:any*/);
 }
-var CompObjP, SummaryP, WorkbookP/*:: :Workbook = XLSX.utils.book_new(); */;
+var /*::CompObjP, */WorkbookP/*:: :Workbook = XLSX.utils.book_new(); */;
 
 var _data/*:?any*/;
-if(CompObj) CompObjP = parse_compobj(CompObj);
+if(CompObj) /*::CompObjP = */parse_compobj(CompObj);
 if(options.bookProps && !options.bookSheets) WorkbookP = ({}/*:any*/);
 else/*:: if(cfb instanceof CFBContainer) */ {
 	var T = has_buf ? 'buffer' : 'array';
@@ -884,7 +928,7 @@ else/*:: if(cfb instanceof CFBContainer) */ {
 }
 
 var props = {};
-if(cfb.FullPaths) parse_props(/*::((*/cfb/*:: :any):CFBContainer)*/, props, options);
+if(cfb.FullPaths) parse_xls_props(/*::((*/cfb/*:: :any):CFBContainer)*/, props, options);
 
 WorkbookP.Props = WorkbookP.Custprops = props; /* TODO: split up properties */
 if(options.bookFiles) WorkbookP.cfb = cfb;
@@ -900,11 +944,14 @@ function write_xlscfb(wb/*:Workbook*/, opts/*:WriteOpts*/)/*:CFBContainer*/ {
 	switch(o.bookType || "xls") {
 		case "xls": o.bookType = "biff8";
 		/* falls through */
+		case "xla": if(!o.bookType) o.bookType = "xla";
+		/* falls through */
 		case "biff8": wbpath = "/Workbook"; o.biff = 8; break;
 		case "biff5": wbpath = "/Book"; o.biff = 5; break;
 		default: throw new Error("invalid type " + o.bookType + " for XLS CFB");
 	}
 	CFB.utils.cfb_add(cfb, wbpath, write_biff_buf(wb, o));
+	if(o.biff == 8 && (wb.Props || wb.Custprops)) write_xls_props(wb, cfb);
 	// TODO: SI, DSI, CO
 	if(o.biff == 8 && wb.vbaraw) fill_vba_xls(cfb, CFB.read(wb.vbaraw, {type: typeof wb.vbaraw == "string" ? "binary" : "buffer"}));
 	return cfb;

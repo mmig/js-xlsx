@@ -6,9 +6,32 @@ RELS.WS = [
 	"http://purl.oclc.org/ooxml/officeDocument/relationships/worksheet"
 ];
 
-function get_sst_id(sst/*:SST*/, str/*:string*/)/*:number*/ {
-	for(var i = 0, len = sst.length; i < len; ++i) if(sst[i].t === str) { sst.Count ++; return i; }
-	sst[len] = {t:str}; sst.Count ++; sst.Unique ++; return len;
+/*global Map */
+var browser_has_Map = typeof Map !== 'undefined';
+
+function get_sst_id(sst/*:SST*/, str/*:string*/, rev)/*:number*/ {
+	var i = 0, len = sst.length;
+	if(rev) {
+		if(browser_has_Map ? rev.has(str) : rev.hasOwnProperty(str)) {
+			var revarr = browser_has_Map ? rev.get(str) : rev[str];
+			for(; i < revarr.length; ++i) {
+				if(sst[revarr[i]].t === str) { sst.Count ++; return revarr[i]; }
+			}
+		}
+	} else for(; i < len; ++i) {
+		if(sst[i].t === str) { sst.Count ++; return i; }
+	}
+	sst[len] = ({t:str}/*:any*/); sst.Count ++; sst.Unique ++;
+	if(rev) {
+		if(browser_has_Map) {
+			if(!rev.has(str)) rev.set(str, []);
+			rev.get(str).push(len);
+		} else {
+			if(!rev.hasOwnProperty(str)) rev[str] = [];
+			rev[str].push(len);
+		}
+	}
+	return len;
 }
 
 function col_obj_w(C/*:number*/, col) {
@@ -37,12 +60,13 @@ function default_margins(margins/*:Margins*/, mode/*:?string*/) {
 	if(margins.footer == null) margins.footer = defs[5];
 }
 
-function get_cell_style(styles, cell, opts) {
+function get_cell_style(styles/*:Array<any>*/, cell/*:Cell*/, opts) {
 	var z = opts.revssf[cell.z != null ? cell.z : "General"];
 	var i = 0x3c, len = styles.length;
 	if(z == null && opts.ssf) {
 		for(; i < 0x188; ++i) if(opts.ssf[i] == null) {
 			SSF.load(cell.z, i);
+			// $FlowIgnore
 			opts.ssf[i] = cell.z;
 			opts.revssf[cell.z] = z = i;
 			break;
@@ -60,13 +84,14 @@ function get_cell_style(styles, cell, opts) {
 	return len;
 }
 
-function safe_format(p, fmtid/*:number*/, fillid/*:?number*/, opts, themes, styles) {
+function safe_format(p/*:Cell*/, fmtid/*:number*/, fillid/*:?number*/, opts, themes, styles) {
 	if(p.t === 'z') return;
 	if(p.t === 'd' && typeof p.v === 'string') p.v = parseDate(p.v);
 	try {
 		if(opts.cellNF) p.z = SSF._table[fmtid];
 	} catch(e) { if(opts.WTF) throw e; }
 	if(!opts || opts.cellText !== false) try {
+		if(SSF._table[fmtid] == null) SSF.load(SSFImplicit[fmtid] || "General", fmtid);
 		if(p.t === 'e') p.w = p.w || BErr[p.v];
 		else if(fmtid === 0) {
 			if(p.t === 'n') {
@@ -96,4 +121,11 @@ function safe_format(p, fmtid/*:number*/, fillid/*:?number*/, opts, themes, styl
 			if(opts.WTF) p.s.bgColor.raw_rgb = themes.themeElements.clrScheme[p.s.bgColor.theme].rgb;
 		}
 	} catch(e) { if(opts.WTF && styles.Fills) throw e; }
+}
+
+function check_ws(ws/*:Worksheet*/, sname/*:string*/, i/*:number*/) {
+	if(ws && ws['!ref']) {
+		var range = safe_decode_range(ws['!ref']);
+		if(range.e.c < range.s.c || range.e.r < range.s.r) throw new Error("Bad range (" + i + "): " + ws['!ref']);
+	}
 }

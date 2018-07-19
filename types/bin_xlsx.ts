@@ -1,7 +1,8 @@
 /* xlsx.js (C) 2013-present  SheetJS -- http://sheetjs.com */
 /* eslint-env node */
-const n = "xlsx";
 /* vim: set ts=2 ft=javascript: */
+/// <reference types="../node_modules/@types/node/" />
+const n = "xlsx";
 import X = require("xlsx");
 import 'exit-on-epipe';
 import * as fs from 'fs';
@@ -19,10 +20,12 @@ program
 	.option('-B, --xlsb', 'emit XLSB to <sheetname> or <file>.xlsb')
 	.option('-M, --xlsm', 'emit XLSM to <sheetname> or <file>.xlsm')
 	.option('-X, --xlsx', 'emit XLSX to <sheetname> or <file>.xlsx')
+	.option('-I, --xlam', 'emit XLAM to <sheetname> or <file>.xlam')
 	.option('-Y, --ods',  'emit ODS  to <sheetname> or <file>.ods')
 	.option('-8, --xls',  'emit XLS  to <sheetname> or <file>.xls (BIFF8)')
 	.option('-5, --biff5','emit XLS  to <sheetname> or <file>.xls (BIFF5)')
 	.option('-2, --biff2','emit XLS  to <sheetname> or <file>.xls (BIFF2)')
+	.option('-i, --xla',  'emit XLA to <sheetname> or <file>.xla')
 	.option('-6, --xlml', 'emit SSML to <sheetname> or <file>.xls (2003 XML)')
 	.option('-T, --fods', 'emit FODS to <sheetname> or <file>.fods (Flat ODS)')
 
@@ -38,10 +41,14 @@ program
 	.option('-E, --eth',  'emit ETH  to <sheetname> or <file>.eth (Ethercalc)')
 	.option('-t, --txt',  'emit TXT  to <sheetname> or <file>.txt (UTF-8 TSV)')
 	.option('-r, --rtf',  'emit RTF  to <sheetname> or <file>.txt (Table RTF)')
+	.option('-z, --dump', 'dump internal representation as JSON')
+	.option('--props',    'dump workbook properties as CSV')
 
 	.option('-F, --field-sep <sep>', 'CSV field separator', ",")
 	.option('-R, --row-sep <sep>', 'CSV row separator', "\n")
 	.option('-n, --sheet-rows <num>', 'Number of rows to process (0=all rows)')
+	.option('--codepage <cp>', 'default to specified codepage when ambiguous')
+	.option('--req <module>', 'require module before processing')
 	.option('--sst', 'generate shared string table for XLS* formats')
 	.option('--compress', 'use compression when writing XLSX/M/B and ODS')
 	.option('--read', 'read but do not generate output')
@@ -61,8 +68,10 @@ program.on('--help', function() {
 const workbook_formats = [
 	['xlsx',   'xlsx', 'xlsx'],
 	['xlsm',   'xlsm', 'xlsm'],
+	['xlam',   'xlam', 'xlam'],
 	['xlsb',   'xlsb', 'xlsb'],
 	['xls',     'xls',  'xls'],
+	['xla',     'xla',  'xla'],
 	['biff5', 'biff5',  'xls'],
 	['ods',     'ods',  'ods'],
 	['fods',   'fods', 'fods']
@@ -89,7 +98,8 @@ if(!fs.existsSync(filename)) {
 	process.exit(2);
 }
 
-let opts: X.ParsingOptions = {}, wb: X.WorkBook;
+const opts: X.ParsingOptions = {};
+let wb: X.WorkBook;
 if(program.listSheets) opts.bookSheets = true;
 if(program.sheetRows) opts.sheetRows = program.sheetRows;
 if(program.password) opts.password = program.password;
@@ -111,7 +121,7 @@ if(seen) {
 } else if(program.formulae) opts.cellFormula = true;
 else opts.cellFormula = false;
 
-let wopts: X.WritingOptions = ({WTF:opts.WTF, bookSST:program.sst}/*:any*/);
+const wopts: X.WritingOptions = ({WTF:opts.WTF, bookSST:program.sst}/*:any*/);
 if(program.compress) wopts.compression = true;
 
 if(program.all) {
@@ -126,6 +136,7 @@ if(program.all) {
 	wopts.bookVBA = true;
 }
 if(program.sparse) opts.dense = false; else opts.dense = true;
+if(program.codepage) opts.codepage = +program.codepage;
 
 if(program.dev) {
 	opts.WTF = true;
@@ -143,6 +154,14 @@ if(!wb) { console.error(n + ": error parsing " + filename + ": empty workbook");
 /*:: if(!wb) throw new Error("unreachable"); */
 if(program.listSheets) {
 	console.log((wb.SheetNames||[]).join("\n"));
+	process.exit(0);
+}
+if(program.dump) {
+	console.log(JSON.stringify(wb));
+	process.exit(0);
+}
+if(program.props) {
+	dump_props(wb);
 	process.exit(0);
 }
 
@@ -206,7 +225,7 @@ else if(program.rawJs) oo = JSON.stringify(X.utils.sheet_to_json(ws,{raw:true}))
 else if(program.arrays) oo = JSON.stringify(X.utils.sheet_to_json(ws,{raw:true, header:1}));
 else {
 	strm = true;
-	let stream: NodeJS.ReadableStream = X.stream.to_csv(ws, {FS:program.fieldSep, RS:program.rowSep});
+	const stream: NodeJS.ReadableStream = X.stream.to_csv(ws, {FS:program.fieldSep, RS:program.rowSep});
 	if(program.output) stream.pipe(fs.createWriteStream(program.output));
 	else stream.pipe(process.stdout);
 }
@@ -217,3 +236,9 @@ if(!strm) {
 }
 /*::   } */
 /*:: } */
+
+function dump_props(wb: X.WorkBook) {
+	let propaoa: any[][] = [];
+	propaoa = (<any>Object).entries({...wb.Props, ...wb.Custprops});
+	console.log(X.utils.sheet_to_csv(X.utils.aoa_to_sheet(propaoa)));
+}

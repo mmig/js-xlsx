@@ -18,7 +18,8 @@ Parse options are described in the [Parsing Options](#parsing-options) section.
 
 `XLSX.write(wb, write_opts)` attempts to write the workbook `wb`
 
-`XLSX.writeFile(wb, filename, write_opts)` attempts to write `wb` to `filename`
+`XLSX.writeFile(wb, filename, write_opts)` attempts to write `wb` to `filename`.
+In browser-based environments, it will attempt to force a client-side download.
 
 `XLSX.writeFileAsync(filename, wb, o, cb)` attempts to write `wb` to `filename`.
 If `o` is omitted, the writer will use the third argument as the callback.
@@ -37,6 +38,8 @@ Utilities are available in the `XLSX.utils` object and are described in the
 - `aoa_to_sheet` converts an array of arrays of JS data to a worksheet.
 - `json_to_sheet` converts an array of JS objects to a worksheet.
 - `table_to_sheet` converts a DOM TABLE element to a worksheet.
+- `sheet_add_aoa` adds an array of arrays of JS data to an existing worksheet.
+- `sheet_add_json` adds an array of JS objects to an existing worksheet.
 
 
 **Exporting:**

@@ -37,7 +37,7 @@ function parse_sst(data, name/*:string*/, opts)/*:SST*/ {
 	return parse_sst_xml((data/*:any*/), opts);
 }
 
-function parse_cmnt(data, name/*:string*/, opts) {
+function parse_cmnt(data, name/*:string*/, opts)/*:Array<RawComment>*/ {
 	if(name.slice(-4)===".bin") return parse_comments_bin((data/*:any*/), opts);
 	return parse_comments_xml((data/*:any*/), opts);
 }
@@ -60,6 +60,7 @@ function write_ws(data/*:number*/, name/*:string*/, opts, wb/*:Workbook*/, rels)
 	return (name.slice(-4)===".bin" ? write_ws_bin : write_ws_xml)(data, opts, wb, rels);
 }
 
+// eslint-disable-next-line no-unused-vars
 function write_cs(data/*:number*/, name/*:string*/, opts, wb/*:Workbook*/, rels) {
 	return (name.slice(-4)===".bin" ? write_cs_bin : write_cs_xml)(data, opts, wb, rels);
 }

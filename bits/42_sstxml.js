@@ -1,33 +1,10 @@
-/* 18.4.1 charset to codepage mapping */
-var CS2CP = ({
-	/*::[*/0/*::]*/:    1252, /* ANSI */
-	/*::[*/1/*::]*/:   65001, /* DEFAULT */
-	/*::[*/2/*::]*/:   65001, /* SYMBOL */
-	/*::[*/77/*::]*/:  10000, /* MAC */
-	/*::[*/128/*::]*/:   932, /* SHIFTJIS */
-	/*::[*/129/*::]*/:   949, /* HANGUL */
-	/*::[*/130/*::]*/:  1361, /* JOHAB */
-	/*::[*/134/*::]*/:   936, /* GB2312 */
-	/*::[*/136/*::]*/:   950, /* CHINESEBIG5 */
-	/*::[*/161/*::]*/:  1253, /* GREEK */
-	/*::[*/162/*::]*/:  1254, /* TURKISH */
-	/*::[*/163/*::]*/:  1258, /* VIETNAMESE */
-	/*::[*/177/*::]*/:  1255, /* HEBREW */
-	/*::[*/178/*::]*/:  1256, /* ARABIC */
-	/*::[*/186/*::]*/:  1257, /* BALTIC */
-	/*::[*/204/*::]*/:  1251, /* RUSSIAN */
-	/*::[*/222/*::]*/:   874, /* THAI */
-	/*::[*/238/*::]*/:  1250, /* EASTEUROPE */
-	/*::[*/255/*::]*/:  1252, /* OEM */
-	/*::[*/69/*::]*/:   6969  /* MISC */
-}/*:any*/);
-
 /* Parse a list of <r> tags */
 var parse_rs = (function parse_rs_factory() {
 	var tregex = matchtag("t"), rpregex = matchtag("rPr"), rregex = /<(?:\w+:)?r>/g, rend = /<\/(?:\w+:)?r>/, nlregex = /\r\n/g;
 	/* 18.4.7 rPr CT_RPrElt */
 	var parse_rpr = function parse_rpr(rpr, intro, outro) {
 		var font = {}, cp = 65001, align = "";
+		var pass = false;
 		var m = rpr.match(tagregex), i = 0;
 		if(m) for(;i!=m.length; ++i) {
 			var y = parsexmltag(m[i]);
@@ -106,7 +83,7 @@ var parse_rs = (function parse_rs_factory() {
 
 				/* 18.3.1.15 color CT_Color TODO: tint, theme, auto, indexed */
 				case '<color':
-					if(y.rgb) font.color = y.rgb.substr(2,6);
+					if(y.rgb) font.color = y.rgb.slice(2,8);
 					break;
 
 				/* 18.8.18 family ST_FontFamily */
@@ -118,15 +95,19 @@ var parse_rs = (function parse_rs_factory() {
 				/* 18.8.35 scheme CT_FontScheme TODO */
 				case '<scheme': break;
 
+				/* 18.2.10 extLst CT_ExtensionList ? */
+				case '<extLst': case '<extLst>': case '</extLst>': break;
+				case '<ext': pass = true; break;
+				case '</ext>': pass = false; break;
 				default:
-					if(y[0].charCodeAt(1) !== 47) throw 'Unrecognized rich format ' + y[0];
+					if(y[0].charCodeAt(1) !== 47 && !pass) throw new Error('Unrecognized rich format ' + y[0]);
 			}
 		}
-		var style = [];
+		var style/*:Array<string>*/ = [];
 
 		if(font.u) style.push("text-decoration: underline;");
 		if(font.uval) style.push("text-underline-style:" + font.uval + ";");
-		if(font.sz) style.push("font-size:" + font.sz + ";");
+		if(font.sz) style.push("font-size:" + font.sz + "pt;");
 		if(font.outline) style.push("text-effect: outline;");
 		if(font.shadow) style.push("text-shadow: auto;");
 		intro.push('<span style="' + style.join("") + '">');
@@ -145,14 +126,14 @@ var parse_rs = (function parse_rs_factory() {
 
 	/* 18.4.4 r CT_RElt */
 	function parse_r(r) {
-		var terms = [[],"",[]];
+		var terms/*:[Array<string>, string, Array<string>]*/ = [[],"",[]];
 		/* 18.4.12 t ST_Xstring */
-		var t = r.match(tregex), cp = 65001;
-		if(!isval(t)/*:: || !t*/) return "";
+		var t = r.match(tregex)/*, cp = 65001*/;
+		if(!t) return "";
 		terms[1] = t[1];
 
 		var rpr = r.match(rpregex);
-		if(isval(rpr)/*:: && rpr*/) cp = parse_rpr(rpr[1], terms[0], terms[2]);
+		if(rpr) /*cp = */parse_rpr(rpr[1], terms[0], terms[2]);
 
 		return terms[0].join("") + terms[1].replace(nlregex,'<br/>') + terms[2].join("");
 	}
@@ -168,7 +149,7 @@ function parse_si(x, opts) {
 	var html = opts ? opts.cellHTML : true;
 	var z = {};
 	if(!x) return null;
-	var y;
+	//var y;
 	/* 18.4.12 t ST_Xstring (Plaintext String) */
 	// TODO: is whitespace actually valid here?
 	if(x.match(/^\s*<(?:\w+:)?t[^>]*>/)) {
@@ -177,7 +158,7 @@ function parse_si(x, opts) {
 		if(html) z.h = escapehtml(z.t);
 	}
 	/* 18.4.4 r CT_RElt (Rich Text Run) */
-	else if((y = x.match(sirregex))) {
+	else if((/*y = */x.match(sirregex))) {
 		z.r = utf8read(x);
 		z.t = unescapexml(utf8read((x.replace(sirphregex, '').match(sitregex)||[]).join("").replace(tagregex,"")));
 		if(html) z.h = parse_rs(z.r);
@@ -196,7 +177,7 @@ function parse_sst_xml(data/*:string*/, opts)/*:SST*/ {
 	if(!data) return s;
 	/* 18.4.9 sst CT_Sst */
 	var sst = data.match(sstr0);
-	if(isval(sst)/*:: && sst*/) {
+	if(sst) {
 		ss = sst[2].replace(sstr1,"").split(sstr2);
 		for(var i = 0; i != ss.length; ++i) {
 			var o = parse_si(ss[i].trim(), opts);

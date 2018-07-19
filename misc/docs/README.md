@@ -6,7 +6,7 @@ Emphasis on parsing and writing robustness, cross-format feature compatibility
 with a unified JS representation, and ES3/ES5 browser compatibility back to IE6.
 
 This is the community version.  We also offer a pro version with performance
-enhancements, additional features by request, and dedicated support.
+enhancements, additional features like styling, and dedicated support.
 
 
 [**Pro Version**](http://sheetjs.com/pro)
@@ -79,6 +79,7 @@ enhancements, additional features by request, and dedicated support.
     + [Workbook File Properties](#workbook-file-properties)
   * [Workbook-Level Attributes](#workbook-level-attributes)
     + [Defined Names](#defined-names)
+    + [Workbook Views](#workbook-views)
     + [Miscellaneous Workbook Properties](#miscellaneous-workbook-properties)
   * [Document Features](#document-features)
     + [Formulae](#formulae)
@@ -149,11 +150,12 @@ In the browser, just add a script tag:
 ```
 
 
-|    CDN     | URL                                      |
-|-----------:|:-----------------------------------------|
-|    `unpkg` | <https://unpkg.com/xlsx/>                |
-| `jsDelivr` | <https://jsdelivr.com/package/npm/xlsx>  |
-|    `CDNjs` | <http://cdnjs.com/libraries/xlsx>        |
+|    CDN     | URL                                        |
+|-----------:|:-------------------------------------------|
+|    `unpkg` | <https://unpkg.com/xlsx/>                  |
+| `jsDelivr` | <https://jsdelivr.com/package/npm/xlsx>    |
+|    `CDNjs` | <http://cdnjs.com/libraries/xlsx>          |
+|    `packd` | <https://bundle.run/xlsx@latest?name=XLSX> |
 
 `unpkg` makes the latest version available at:
 
@@ -180,16 +182,21 @@ $ bower install js-xlsx
 The [`demos` directory](demos/) includes sample projects for:
 
 **Frameworks and APIs**
-- [`angular 1.x`](demos/angular/)
-- [`angular 2.x / 4.x / 5.x`](demos/angular2/)
+- [`angularjs`](demos/angular/)
+- [`angular 2 / 4 / 5 / 6 and ionic`](demos/angular2/)
+- [`knockout`](demos/knockout/)
 - [`meteor`](demos/meteor/)
 - [`react and react-native`](demos/react/)
 - [`vue 2.x and weex`](demos/vue/)
 - [`XMLHttpRequest and fetch`](demos/xhr/)
 - [`nodejs server`](demos/server/)
+- [`databases and key/value stores`](demos/database/)
+- [`typed arrays and math`](demos/array/)
 
 **Bundlers and Tooling**
 - [`browserify`](demos/browserify/)
+- [`fusebox`](demos/fusebox/)
+- [`parcel`](demos/parcel/)
 - [`requirejs`](demos/requirejs/)
 - [`rollup`](demos/rollup/)
 - [`systemjs`](demos/systemjs/)
@@ -199,10 +206,13 @@ The [`demos` directory](demos/) includes sample projects for:
 **Platforms and Integrations**
 - [`electron application`](demos/electron/)
 - [`nw.js application`](demos/nwjs/)
+- [`Chrome / Chromium extensions`](demos/chrome/)
 - [`Adobe ExtendScript`](demos/extendscript/)
 - [`Headless Browsers`](demos/headless/)
 - [`canvas-datagrid`](demos/datagrid/)
 - [`Swift JSC and other engines`](demos/altjs/)
+- [`"serverless" functions`](demos/function/)
+- [`internet explorer`](demos/oldie/)
 
 ### Optional Modules
 
@@ -241,10 +251,14 @@ To use the shim, add the shim before the script tag that loads `xlsx.js`:
 
 ```html
 <!-- add the shim first -->
-<script type="text/javascript" src="shim.js"></script>
+<script type="text/javascript" src="shim.min.js"></script>
 <!-- after the shim is referenced, add the library -->
 <script type="text/javascript" src="xlsx.full.min.js"></script>
 ```
+
+The script also includes `IE_LoadFile` and `IE_SaveFile` for loading and saving
+files in Internet Explorer versions 6-9.  The `xlsx.extendscript.js` script
+bundles the shim in a format suitable for Photoshop and other Adobe products.
 
 ## Philosophy
 
@@ -277,6 +291,10 @@ space and open much faster!  Even though an XLSX writer is available, other
 format writers are available so users can take advantage of the unique
 characteristics of each format.
 
+The primary focus of the Community Edition is correct data interchange, focused
+on extracting data from any compatible data representation and exporting data in
+various formats suitable for any third party interface.
+
 
 ## Parsing Workbooks
 
@@ -295,25 +313,56 @@ var workbook = XLSX.readFile('test.xlsx');
 
 
 
+`readFile` wraps the `File` logic in Photoshop and other ExtendScript targets.
+The specified path should be an absolute path:
+
+```js
+#include "xlsx.extendscript.js"
+/* Read test.xlsx from the Documents folder */
+var workbook = XLSX.readFile(Folder.myDocuments + '/' + 'test.xlsx');
+/* DO SOMETHING WITH workbook HERE */
+```
+
+The [`extendscript` demo](demos/extendscript/) includes a more complex example.
+
+
+
 The `table_to_book` and `table_to_sheet` utility functions take a DOM TABLE
 element and iterate through the child nodes.
 
 ```js
-var worksheet = XLSX.utils.table_to_book(document.getElementById('tableau'));
+var workbook = XLSX.utils.table_to_book(document.getElementById('tableau'));
 /* DO SOMETHING WITH workbook HERE */
+```
+
+Multiple tables on a web page can be converted to individual worksheets:
+
+```js
+/* create new workbook */
+var workbook = XLSX.utils.book_new();
+
+/* convert table 'table1' to worksheet named "Sheet1" */
+var ws1 = XLSX.utils.table_to_sheet(document.getElementById('table1'));
+XLSX.utils.book_append_sheet(workbook, ws1, "Sheet1");
+
+/* convert table 'table2' to worksheet named "Sheet2" */
+var ws2 = XLSX.utils.table_to_sheet(document.getElementById('table2'));
+XLSX.utils.book_append_sheet(workbook, ws2, "Sheet2");
+
+/* workbook now has 2 worksheets */
 ```
 
 Alternatively, the HTML code can be extracted and parsed:
 
 ```js
 var htmlstr = document.getElementById('tableau').outerHTML;
-var worksheet = XLSX.read(htmlstr, {type:'string'});
+var workbook = XLSX.read(htmlstr, {type:'string'});
 ```
 
 
 
 Note: for a more complete example that works in older browsers, check the demo
-at <http://oss.sheetjs.com/js-xlsx/ajax.html>).  The <demos/xhr/> directory also
+at <http://oss.sheetjs.com/js-xlsx/ajax.html>.  The [`xhr` demo](demos/xhr/)
 includes more examples with `XMLHttpRequest` and `fetch`.
 
 ```js
@@ -380,7 +429,11 @@ function handleFile(e) {
 input_dom_element.addEventListener('change', handleFile, false);
 ```
 
+The [`oldie` demo](demos/oldie/) shows an IE-compatible fallback scenario.
 
+
+More specialized cases, including mobile app file processing, are covered in the
+[included demos](demos/)
 
 ### Parsing Examples
 
@@ -489,7 +542,7 @@ var desired_value = (desired_cell ? desired_cell.v : undefined);
 
 
 This example uses [`XLSX.utils.aoa_to_sheet`](#array-of-arrays-input) to make a
-worksheet and appends the new worksheet to the workbook:
+sheet and `XLSX.utils.book_append_sheet` to append the sheet to the workbook:
 
 ```js
 var new_ws_name = "SheetJS";
@@ -501,13 +554,23 @@ var ws_data = [
 ];
 var ws = XLSX.utils.aoa_to_sheet(ws_data);
 
-/* Add the sheet name to the list */
-wb.SheetNames.push(ws_name);
-
-/* Load the worksheet object */
-wb.Sheets[ws_name] = ws;
-
+/* Add the worksheet to the workbook */
+XLSX.utils.book_append_sheet(wb, ws, ws_name);
 ```
+
+
+
+The workbook object contains a `SheetNames` array of names and a `Sheets` object
+mapping sheet names to sheet objects. The `XLSX.utils.book_new` utility function
+creates a new workbook object:
+
+```js
+/* create a new blank workbook */
+var wb = XLSX.utils.book_new();
+```
+
+The new workbook is blank and contains no worksheets. The write functions will
+error if the workbook is empty.
 
 
 
@@ -537,8 +600,7 @@ dissemination.  The second step is to actual share the data with the end point.
 Assuming `workbook` is a workbook object:
 
 
-`writeFile` is only available in server environments. Browsers have no API for
-writing arbitrary files given a path, so another strategy must be used.
+`XLSX.writeFile` uses `fs.writeFileSync` in server environments:
 
 ```js
 if(typeof require !== 'undefined') XLSX = require('xlsx');
@@ -549,6 +611,20 @@ XLSX.writeFile(workbook, 'out.xlsb');
 
 
 
+`writeFile` wraps the `File` logic in Photoshop and other ExtendScript targets.
+The specified path should be an absolute path:
+
+```js
+#include "xlsx.extendscript.js"
+/* output format determined by filename */
+XLSX.writeFile(workbook, 'out.xlsx');
+/* at this point, out.xlsx is a file that you can distribute */
+```
+
+The [`extendscript` demo](demos/extendscript/) includes a more complex example.
+
+
+
 The `sheet_to_html` utility function generates HTML code that can be added to
 any DOM element.
 
@@ -556,29 +632,6 @@ any DOM element.
 var worksheet = workbook.Sheets[workbook.SheetNames[0]];
 var container = document.getElementById('tableau');
 container.innerHTML = XLSX.utils.sheet_to_html(worksheet);
-```
-
-
-
-
-Note: browser generates binary blob and forces a "download" to client.  This
-example uses [FileSaver](https://github.com/eligrey/FileSaver.js/):
-
-```js
-/* bookType can be any supported output type */
-var wopts = { bookType:'xlsx', bookSST:false, type:'binary' };
-
-var wbout = XLSX.write(workbook,wopts);
-
-function s2ab(s) {
-  var buf = new ArrayBuffer(s.length);
-  var view = new Uint8Array(buf);
-  for (var i=0; i!=s.length; ++i) view[i] = s.charCodeAt(i) & 0xFF;
-  return buf;
-}
-
-/* the saveAs call downloads a file on the local machine */
-saveAs(new Blob([s2ab(wbout)],{type:"application/octet-stream"}), "test.xlsx");
 ```
 
 
@@ -602,6 +655,59 @@ req.send(formdata);
 ```
 
 
+
+`XLSX.writeFile` wraps a few techniques for triggering a file save:
+
+- `URL` browser API creates an object URL for the file, which the library uses
+  by creating a link and forcing a click. It is supported in modern browsers.
+- `msSaveBlob` is an IE10+ API for triggering a file save.
+- `IE_FileSave` uses VBScript and ActiveX to write a file in IE6+ for Windows
+  XP and Windows 7.  The shim must be included in the containing HTML page.
+
+There is no standard way to determine if the actual file has been downloaded.
+
+```js
+/* output format determined by filename */
+XLSX.writeFile(workbook, 'out.xlsb');
+/* at this point, out.xlsb will have been downloaded */
+```
+
+
+
+`XLSX.writeFile` techniques work for most modern browsers as well as older IE.
+For much older browsers, there are workarounds implemented by wrapper libraries.
+
+[`FileSaver.js`](https://github.com/eligrey/FileSaver.js/) implements `saveAs`.
+Note: `XLSX.writeFile` will automatically call `saveAs` if available.
+
+```js
+/* bookType can be any supported output type */
+var wopts = { bookType:'xlsx', bookSST:false, type:'array' };
+
+var wbout = XLSX.write(workbook,wopts);
+
+/* the saveAs call downloads a file on the local machine */
+saveAs(new Blob([wbout],{type:"application/octet-stream"}), "test.xlsx");
+```
+
+[`Downloadify`](https://github.com/dcneiner/downloadify) uses a Flash SWF button
+to generate local files, suitable for environments where ActiveX is unavailable:
+
+```js
+Downloadify.create(id,{
+	/* other options are required! read the downloadify docs for more info */
+	filename: "test.xlsx",
+	data: function() { return XLSX.write(wb, {bookType:"xlsx", type:'base64'}); },
+	append: false,
+	dataType: 'base64'
+});
+```
+
+The [`oldie` demo](demos/oldie/) shows an IE-compatible fallback scenario.
+
+
+The [included demos](demos/) cover mobile apps and other special deployments.
+
 ### Writing Examples
 
 - <http://sheetjs.com/demos/table.html> exporting an HTML table
@@ -615,12 +721,26 @@ Stream.  They are only exposed in NodeJS.
 
 - `XLSX.stream.to_csv` is the streaming version of `XLSX.utils.sheet_to_csv`.
 - `XLSX.stream.to_html` is the streaming version of `XLSX.utils.sheet_to_html`.
+- `XLSX.stream.to_json` is the streaming version of `XLSX.utils.sheet_to_json`.
 
 
 ```js
 var output_file_name = "out.csv";
 var stream = XLSX.stream.to_csv(worksheet);
 stream.pipe(fs.createWriteStream(output_file_name));
+```
+
+
+
+```js
+/* to_json returns an object-mode stream */
+var stream = XLSX.stream.to_json(worksheet, {raw:true});
+
+/* the following stream converts JS objects to text via JSON.stringify */
+var conv = new Transform({writableObjectMode:true});
+conv._transform = function(obj, e, cb){ cb(null, JSON.stringify(obj) + "\n"); };
+
+stream.pipe(conv); conv.pipe(process.stdout);
 ```
 
 
@@ -646,7 +766,8 @@ Parse options are described in the [Parsing Options](#parsing-options) section.
 
 `XLSX.write(wb, write_opts)` attempts to write the workbook `wb`
 
-`XLSX.writeFile(wb, filename, write_opts)` attempts to write `wb` to `filename`
+`XLSX.writeFile(wb, filename, write_opts)` attempts to write `wb` to `filename`.
+In browser-based environments, it will attempt to force a client-side download.
 
 `XLSX.writeFileAsync(filename, wb, o, cb)` attempts to write `wb` to `filename`.
 If `o` is omitted, the writer will use the third argument as the callback.
@@ -665,6 +786,8 @@ Utilities are available in the `XLSX.utils` object and are described in the
 - `aoa_to_sheet` converts an array of arrays of JS data to a worksheet.
 - `json_to_sheet` converts an array of JS objects to a worksheet.
 - `table_to_sheet` converts a DOM TABLE element to a worksheet.
+- `sheet_add_aoa` adds an array of arrays of JS data to an existing worksheet.
+- `sheet_add_json` adds an array of JS objects to an existing worksheet.
 
 
 **Exporting:**
@@ -712,11 +835,13 @@ for(var R = range.s.r; R <= range.e.r; ++R) {
 
 ### Cell Object
 
+Cell objects are plain JS objects with keys and values following the convention:
+
 | Key | Description                                                            |
 | --- | ---------------------------------------------------------------------- |
 | `v` | raw value (see Data Types section for more info)                       |
 | `w` | formatted text (if applicable)                                         |
-| `t` | cell type: `b` Boolean, `n` Number, `e` error, `s` String, `d` Date    |
+| `t` | type: `b` Boolean, `e` Error, `n` Number, `d` Date, `s` Text, `z` Stub |
 | `f` | cell formula encoded as an A1-style string (if applicable)             |
 | `F` | range of enclosing array if formula is array formula (if applicable)   |
 | `r` | rich text encoding (if applicable)                                     |
@@ -736,11 +861,18 @@ array range.  Other cells in the range will omit the `f` field.
 
 #### Data Types
 
-The raw value is stored in the `v` field, interpreted based on the `t` field.
+The raw value is stored in the `v` value property, interpreted based on the `t`
+type property.  This separation allows for representation of numbers as well as
+numeric text.  There are 6 valid cell types:
 
-Type `b` is the Boolean type.  `v` is interpreted according to JS truth tables.
-
-Type `e` is the Error type. `v` holds the number and `w` holds the common name:
+| Type | Description                                                           |
+| :--: | :-------------------------------------------------------------------- |
+| `b`  | Boolean: value interpreted as JS `boolean`                            |
+| `e`  | Error: value is a numeric code and `w` property stores common name ** |
+| `n`  | Number: value is a JS `number` **                                     |
+| `d`  | Date: value is a JS `Date` object or string to be parsed as Date **   |
+| `s`  | Text: value interpreted as JS `string` and written as text **         |
+| `z`  | Stub: blank stub cell that is ignored by data processing utilities ** |
 
 
 |  Value | Error Meaning   |
@@ -766,14 +898,17 @@ Since JSON does not have a natural Date type, parsers are generally expected to
 store ISO 8601 Date strings like you would get from `date.toISOString()`.  On
 the other hand, writers and exporters should be able to handle date strings and
 JS Date objects.  Note that Excel disregards timezone modifiers and treats all
-dates in the local timezone.  js-xlsx does not correct for this error.
+dates in the local timezone.  The library does not correct for this error.
 
-Type `s` is the String type.  `v` should be explicitly stored as a string to
-avoid possible confusion.
+Type `s` is the String type.  Values are explicitly stored as text.  Excel will
+interpret these cells as "number stored as text".  Generated Excel files
+automatically suppress that class of error, but other formats may elicit errors.
 
-Type `z` represents blank stub cells.  These do not have any data or type, and
-are not processed by any of the core library functions.  By default these cells
-will not be generated; the parser `sheetStubs` option must be set to `true`.
+Type `z` represents blank stub cells.  They are generated in cases where cells
+have no assigned value but hold comments or other metadata. They are ignored by
+the core library data processing utility functions.  By default these cells are
+not generated; the parser `sheetStubs` option must be set to `true`.
+
 
 #### Dates
 
@@ -995,6 +1130,14 @@ XLSX.write(wb, {Props:{Author:"SheetJS"}});
 Excel allows two sheet-scoped defined names to share the same name.  However, a
 sheet-scoped name cannot collide with a workbook-scope name.  Workbook writers
 may not enforce this constraint.
+
+#### Workbook Views
+
+`wb.Workbook.Views` is an array of workbook view objects which have the keys:
+
+| Key             | Description                                         |
+|:----------------|:----------------------------------------------------|
+| `RTL`           | If true, display right-to-left                      |
 
 #### Miscellaneous Workbook Properties
 
@@ -1299,6 +1442,17 @@ ws.A1.c.push({a:"SheetJS", t:"I'm a little comment, short and stout!"});
 Note: XLSB enforces a 54 character limit on the Author name.  Names longer than
 54 characters may cause issues with other formats.
 
+To mark a comment as normally hidden, set the `hidden` property:
+
+```js
+if(!ws.A1.c) ws.A1.c = [];
+ws.A1.c.push({a:"SheetJS", t:"This comment is visible"});
+
+if(!ws.A2.c) ws.A2.c = [];
+ws.A2.c.hidden = true;
+ws.A2.c.push({a:"SheetJS", t:"This comment will be hidden"});
+```
+
 #### Sheet Visibility
 
 Excel enables hiding sheets in the lower tab bar.  The sheet data is stored in
@@ -1487,7 +1641,7 @@ expected number of rows or columns.  Extracting the range is extremely simple:
 
 ```js
 var range = XLSX.utils.decode_range(worksheet['!ref']);
-var ncols = range.e.c - range.r.c + 1, nrows = range.e.r - range.s.r + 1;
+var ncols = range.e.c - range.s.c + 1, nrows = range.e.r - range.s.r + 1;
 ```
 
 ## Writing Options
@@ -1560,6 +1714,7 @@ The `type` argument for `write` mirrors the `type` argument for `read`:
 | `"binary"` | string: binary string (byte `n` is `data.charCodeAt(n)`)        |
 | `"string"` | string: JS string (characters interpreted as UTF8)              |
 | `"buffer"` | nodejs Buffer                                                   |
+| `"array"`  | ArrayBuffer, fallback array of 8-bit unsigned int               |
 | `"file"`   | string: path of file that will be created (nodejs only)         |
 
 ## Utility Functions
@@ -1603,6 +1758,58 @@ var ws = XLSX.utils.aoa_to_sheet([
 ]);
 ```
 
+`XLSX.utils.sheet_add_aoa` takes an array of arrays of JS values and updates an
+existing worksheet object.  It follows the same process as `aoa_to_sheet` and
+accepts an options argument:
+
+| Option Name |  Default | Description                                         |
+| :---------- | :------: | :-------------------------------------------------- |
+|`dateNF`     |  FMT 14  | Use specified date format in string output          |
+|`cellDates`  |  false   | Store dates as type `d` (default is `n`)            |
+|`sheetStubs` |  false   | Create cell objects of type `z` for `null` values   |
+|`origin`     |          | Use specified cell as starting point (see below)    |
+
+`origin` is expected to be one of:
+
+| `origin`         | Description                                               |
+| :--------------- | :-------------------------------------------------------- |
+| (cell object)    | Use specified cell (cell object)                          |
+| (string)         | Use specified cell (A1-style cell)                        |
+| (number >= 0)    | Start from the first column at specified row (0-indexed)  |
+| -1               | Append to bottom of worksheet starting on first column    |
+| (default)        | Start from cell A1                                        |
+
+
+
+Consider the worksheet:
+
+```
+XXX| A | B | C | D | E | F | G |
+---+---+---+---+---+---+---+---+
+ 1 | S | h | e | e | t | J | S |
+ 2 | 1 | 2 |   |   | 5 | 6 | 7 |
+ 3 | 2 | 3 |   |   | 6 | 7 | 8 |
+ 4 | 3 | 4 |   |   | 7 | 8 | 9 |
+ 5 | 4 | 5 | 6 | 7 | 8 | 9 | 0 |
+```
+
+This worksheet can be built up in the order `A1:G1, A2:B4, E2:G4, A5:G5`:
+
+```js
+/* Initial row */
+var ws = XLSX.utils.aoa_to_sheet([ "SheetJS".split("") ]);
+
+/* Write data starting at A2 */
+XLSX.utils.sheet_add_aoa(ws, [[1,2], [2,3], [3,4]], {origin: "A2"});
+
+/* Write data starting at E2 */
+XLSX.utils.sheet_add_aoa(ws, [[5,6,7], [6,7,8], [7,8,9]], {origin:{r:1, c:4}});
+
+/* Append row */
+XLSX.utils.sheet_add_aoa(ws, [[4,5,6,7,8,9,0]], {origin: -1});
+```
+
+
 ### Array of Objects Input
 
 `XLSX.utils.json_to_sheet` takes an array of objects and returns a worksheet
@@ -1615,17 +1822,90 @@ default column order is determined by the first appearance of the field using
 |`header`     |          | Use specified column order (default `Object.keys`)  |
 |`dateNF`     |  FMT 14  | Use specified date format in string output          |
 |`cellDates`  |  false   | Store dates as type `d` (default is `n`)            |
+|`skipHeader` |  false   | If true, do not include header row in output        |
 
 
-The original sheet cannot be reproduced because JS object keys must be unique.
-After replacing the second `e` and `S` with `e_1` and `S_1`:
+The original sheet cannot be reproduced in the obvious way since JS object keys
+must be unique. After replacing the second `e` and `S` with `e_1` and `S_1`:
 
 ```js
 var ws = XLSX.utils.json_to_sheet([
-  {S:1,h:2,e:3,e_1:4,t:5,J:6,S_1:7},
-  {S:2,h:3,e:4,e_1:5,t:6,J:7,S_1:8}
+  { S:1, h:2, e:3, e_1:4, t:5, J:6, S_1:7 },
+  { S:2, h:3, e:4, e_1:5, t:6, J:7, S_1:8 }
 ], {header:["S","h","e","e_1","t","J","S_1"]});
 ```
+
+Alternatively, the header row can be skipped:
+
+```js
+var ws = XLSX.utils.json_to_sheet([
+  { A:"S", B:"h", C:"e", D:"e", E:"t", F:"J", G:"S" },
+  { A: 1,  B: 2,  C: 3,  D: 4,  E: 5,  F: 6,  G: 7  },
+  { A: 2,  B: 3,  C: 4,  D: 5,  E: 6,  F: 7,  G: 8  }
+], {header:["A","B","C","D","E","F","G"], skipHeader:true});
+```
+
+
+`XLSX.utils.sheet_add_json` takes an array of objects and updates an existing
+worksheet object.  It follows the same process as `json_to_sheet` and accepts
+an options argument:
+
+| Option Name |  Default | Description                                         |
+| :---------- | :------: | :-------------------------------------------------- |
+|`header`     |          | Use specified column order (default `Object.keys`)  |
+|`dateNF`     |  FMT 14  | Use specified date format in string output          |
+|`cellDates`  |  false   | Store dates as type `d` (default is `n`)            |
+|`skipHeader` |  false   | If true, do not include header row in output        |
+|`origin`     |          | Use specified cell as starting point (see below)    |
+
+`origin` is expected to be one of:
+
+| `origin`         | Description                                               |
+| :--------------- | :-------------------------------------------------------- |
+| (cell object)    | Use specified cell (cell object)                          |
+| (string)         | Use specified cell (A1-style cell)                        |
+| (number >= 0)    | Start from the first column at specified row (0-indexed)  |
+| -1               | Append to bottom of worksheet starting on first column    |
+| (default)        | Start from cell A1                                        |
+
+
+
+Consider the worksheet:
+
+```
+XXX| A | B | C | D | E | F | G |
+---+---+---+---+---+---+---+---+
+ 1 | S | h | e | e | t | J | S |
+ 2 | 1 | 2 |   |   | 5 | 6 | 7 |
+ 3 | 2 | 3 |   |   | 6 | 7 | 8 |
+ 4 | 3 | 4 |   |   | 7 | 8 | 9 |
+ 5 | 4 | 5 | 6 | 7 | 8 | 9 | 0 |
+```
+
+This worksheet can be built up in the order `A1:G1, A2:B4, E2:G4, A5:G5`:
+
+```js
+/* Initial row */
+var ws = XLSX.utils.json_to_sheet([
+  { A: "S", B: "h", C: "e", D: "e", E: "t", F: "J", G: "S" }
+], {header: ["A", "B", "C", "D", "E", "F", "G"], skipHeader: true});
+
+/* Write data starting at A2 */
+XLSX.utils.sheet_add_json(ws, [
+  { A: 1, B: 2 }, { A: 2, B: 3 }, { A: 3, B: 4 }
+], {skipHeader: true, origin: "A2"});
+
+/* Write data starting at E2 */
+XLSX.utils.sheet_add_json(ws, [
+  { A: 5, B: 6, C: 7 }, { A: 6, B: 7, C: 8 }, { A: 7, B: 8, C: 9 }
+], {skipHeader: true, origin: { r: 1, c: 4 }, header: [ "A", "B", "C" ]});
+
+/* Append row */
+XLSX.utils.sheet_add_json(ws, [
+  { A: 4, B: 5, C: 6, D: 7, E: 8, F: 9, G: 0 }
+], {header: ["A", "B", "C", "D", "E", "F", "G"], skipHeader: true, origin: -1});
+```
+
 
 ### HTML Table Input
 
@@ -1639,9 +1919,11 @@ Both functions accept options arguments:
 
 | Option Name |  Default | Description                                         |
 | :---------- | :------: | :-------------------------------------------------- |
+|`raw`        |          | If true, every cell will hold raw strings           |
 |`dateNF`     |  FMT 14  | Use specified date format in string output          |
 |`cellDates`  |  false   | Store dates as type `d` (default is `n`)            |
-|`raw`        |          | If true, every cell will hold raw strings           |
+|`sheetRows`  |    0     | If >0, read the first `sheetRows` rows of the table |
+|`display`    |  false   | If true, hidden rows and cells will not be parsed   |
 
 
 
@@ -1676,7 +1958,7 @@ For the example sheet:
 
 ```js
 > var o = XLSX.utils.sheet_to_formulae(ws);
-> o.filter(function(v, i) { return i % 5 === 0; });
+> [o[0], o[5], o[10], o[15], o[20]];
 [ 'A1=\'S', 'F1=\'J', 'D2=4', 'B3=3', 'G3=8' ]
 ```
 
@@ -1728,6 +2010,7 @@ produces HTML output.  The function takes an options argument:
 
 | Option Name |  Default | Description                                         |
 | :---------- | :------: | :-------------------------------------------------- |
+|`id`         |          | Specify the `id` attribute for the `TABLE` element  |
 |`editable`   |  false   | If true, set `contenteditable="true"` for every TD  |
 |`header`     |          | Override header (default `html body`)               |
 |`footer`     |          | Override footer (default `/body /html`)             |
@@ -1959,6 +2242,20 @@ Despite the library name `xlsx`, it supports numerous spreadsheet file formats:
 | HTML Tables                                                  |  :o:  |  :o:  |
 | Rich Text Format tables (RTF)                                |       |  :o:  |
 | Ethercalc Record Format (ETH)                                |  :o:  |  :o:  |
+
+Features not supported by a given file format will not be written.  Formats with
+range limits will be silently truncated:
+
+| Format                                    | Last Cell  | Max Cols | Max Rows |
+|:------------------------------------------|:-----------|---------:|---------:|
+| Excel 2007+ XML Formats (XLSX/XLSM)       | XFD1048576 |    16384 |  1048576 |
+| Excel 2007+ Binary Format (XLSB BIFF12)   | XFD1048576 |    16384 |  1048576 |
+| Excel 97-2004 (XLS BIFF8)                 | IV65536    |      256 |    65536 |
+| Excel 5.0/95 (XLS BIFF5)                  | IV16384    |      256 |    16384 |
+| Excel 2.0/2.1 (XLS BIFF2)                 | IV16384    |      256 |    16384 |
+
+Excel 2003 SpreadsheetML range limits are governed by the version of Excel and
+are not enforced by the writer.
 
 ### Excel 2007+ XML (XLSX/XLSM)
 

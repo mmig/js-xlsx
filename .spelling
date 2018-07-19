@@ -36,14 +36,19 @@ CDNjs
 CommonJS
 Ethercalc
 ExtendScript
-FileSaver
+IndexedDB
 JavaScriptCore
+LocalStorage
 NPM
 Nuxt.js
+Redis
 RequireJS
 Rollup
+SessionStorage
+SQLite
 SystemJS
 VueJS
+WebSQL
 iOS
 nodejs
 npm
@@ -52,14 +57,20 @@ webpack
 weex
 
 # Other terms
+ActiveX
 APIs
+ArrayBuffer
 Base64
 Booleans
+FileReader
 JS
+NoSQL
 README
 UTF-16
+VBScript
 XHR
 XMLHttpRequest
+bundler
 bundlers
 cleanroom
 config
@@ -69,6 +80,7 @@ deduplication
 destructuring
 embeddable
 filesystem
+globals
 javascript
 metadata
 natively
@@ -78,24 +90,46 @@ prepend
 prepended
 repo
 runtime
+serverless
 submodule
 transpiled
 
  - demos/altjs/README.md
 ChakraCore
 Duktape
+Goja
 Nashorn
 
  - demos/angular/README.md
-angular-ui-grid
-ui-grid
+AngularJS
  
  - demos/angular2/README.md
+NativeScript
 angular-cli
+
+ - demos/array/README.md
+WebGL
+WebAssembly
+dataset
+TensorFlow
+
+ - demos/database/README.md
+Knex
+LowDB
+MariaDB
+MongoDB
+MySQL
+PostgreSQL
+schemaless
+schemas
+storages
 
  - demos/extendscript/README.md
 Photoshop
 minifier
+
+ - demos/function/README.md
+microservice
 
  - demos/headless/README.md
 PhantomJS

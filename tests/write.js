@@ -1,6 +1,10 @@
 /* writing feature test -- look for TEST: in comments */
 /* vim: set ts=2 ft=javascript: */
 
+if(typeof console === 'undefined') console = {log: function(){}};
+
+var ext = typeof process !== 'undefined' && !!process.argv[2];
+
 /* original data */
 var data = [
 	[1, 2, 3],
@@ -10,6 +14,7 @@ var data = [
 	["hidden"],
 	["visible"]
 ];
+if(isNaN(data[2][2].getYear())) data[2][2] = new Date(Date.UTC(2014, 1, 19, 14, 30, 0));
 
 var ws_name = "SheetJS";
 
@@ -108,6 +113,9 @@ XLSX.utils.cell_set_number_format(ws['C2'], custfmt);
 /* TEST: page margins */
 ws['!margins'] =  { left:1.0, right:1.0, top:1.0, bottom:1.0, header:0.5, footer:0.5 };
 
+/* TEST: merge cells */
+ws['!merges'] = [ XLSX.utils.decode_range("A6:C6") ];
+
 console.log("JSON Data:");
 console.log(XLSX.utils.sheet_to_json(ws, {header:1}));
 
@@ -158,7 +166,7 @@ ws['!protect'] = {
 if(!wb.Workbook) wb.Workbook = {Sheets:[], WBProps:{}};
 if(!wb.Workbook.WBProps) wb.Workbook.WBProps = {};
 wb.Workbook.WBProps.filterPrivacy = true;
-//wb.Workbook.Views = [{RTL:true}];
+if(ext) wb.Workbook.Views = [{RTL:true}];
 
 console.log("Worksheet Model:");
 console.log(ws);
@@ -167,10 +175,12 @@ var filenames = [
 	['sheetjs.xlsx', {bookSST:true}],
 	['sheetjs.xlsm'],
 	['sheetjs.xlsb'],
+	['sheetjs.xlam'],
 	['sheetjs.biff8.xls', {bookType:'xls'}],
 	['sheetjs.biff5.xls', {bookType:'biff5'}],
 	['sheetjs.biff2.xls', {bookType:'biff2'}],
 	['sheetjs.xml.xls', {bookType:'xlml'}],
+	['sheetjs.xla'],
 	['sheetjs.ods'],
 	['sheetjs.fods'],
 	['sheetjs.csv'],
@@ -184,9 +194,21 @@ var filenames = [
 	['sheetjs.prn']
 ];
 
+var OUT = ["base64", "binary", "string", "array"];
+if(typeof Buffer !== 'undefined') OUT.push("buffer");
 filenames.forEach(function(r) {
-		/* write file */
-		XLSX.writeFile(wb, r[0], r[1]);
-		/* test by reading back files */
-		XLSX.readFile(r[0]);
+	/* write file */
+	XLSX.writeFile(wb, r[0], r[1]);
+	/* test by reading back files */
+	if(typeof process !== 'undefined') XLSX.readFile(r[0]);
+
+	var ext = r[1] && r[1].bookType || r[0].split(".")[1];
+	ext = {"htm":"html"}[ext] || ext;
+	OUT.forEach(function(type) {
+		if(type == "string" && ["xlsx", "xlsm", "xlsb", "xlam", "biff8", "biff5", "biff2", "xla", "ods", "dbf"].indexOf(ext) > -1) return;
+		if(type == "array" && ["xlsx", "xlsm", "xlsb", "xlam", "ods"].indexOf(ext) > -1 && typeof Uint8Array === 'undefined') return;
+		var datout = XLSX.write(wb, {type: type, bookType: ext, sheet:r[1] && r[1].sheet || null});
+		XLSX.read(datout, {type:type});
+		if(type == "array") console.log(ext, datout);
+	});
 });

@@ -27,7 +27,9 @@ type Workbook = {
 type WBWBProps = {
 	Sheets: Array<WBWSProp>;
 	Names?: Array<any>;
+	Views?: Array<any>;
 	WBProps?: WBProps;
+	SheetNames?: Array<string>;
 };
 
 type WBProps = {
@@ -60,6 +62,8 @@ type WBWSProp = {
 interface CellAddress {
 	r:number;
 	c:number;
+	cRel?:boolean;
+	rRel?:boolean;
 };
 type CellAddrSpec = CellAddress | string;
 
@@ -96,7 +100,14 @@ type SST = {
 	length:number;
 };
 
-type Comment = any;
+type Comment = {
+	t:string;
+	a?:string;
+	r?:string;
+	h?:string;
+};
+
+type RawComment = any;
 
 type RowInfo = {
 	hidden?:boolean; // if true, the row is hidden
@@ -114,6 +125,8 @@ type ColInfo = {
 	wch?:number;     // width in characters
 
 	MDW?:number;     // Excel's "Max Digit Width" unit, always integral
+
+	customWidth?:boolean;
 };
 
 interface Margins {

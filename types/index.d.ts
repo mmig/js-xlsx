@@ -1,20 +1,22 @@
 /* index.d.ts (C) 2015-present SheetJS and contributors */
 // TypeScript Version: 2.2
+import * as CFB from "cfb";
+import * as SSF from "ssf";
 
 /** Version string */
 export const version: string;
 
 /** SSF Formatter Library */
-export const SSF: any;
+export { SSF };
 
 /** CFB Library */
-export const CFB: any;
+export { CFB };
 
-/** Attempts to read filename and parse */
+/** NODE ONLY! Attempts to read filename and parse */
 export function readFile(filename: string, opts?: ParsingOptions): WorkBook;
 /** Attempts to parse data */
 export function read(data: any, opts?: ParsingOptions): WorkBook;
-/** NODE ONLY! Attempts to write workbook data to filename */
+/** Attempts to write or download workbook data to file */
 export function writeFile(data: WorkBook, filename: string, opts?: WritingOptions): any;
 /** Attempts to write the workbook data */
 export function write(data: WorkBook, opts?: WritingOptions): any;
@@ -108,7 +110,10 @@ export interface DateNFOption {
 /** Options for read and readFile */
 export interface ParsingOptions extends CommonOptions {
     /** Input data encoding */
-    type?: 'base64' | 'binary' | 'buffer' | 'file' | 'array';
+    type?: 'base64' | 'binary' | 'buffer' | 'file' | 'array' | 'string';
+
+    /** Default codepage */
+    codepage?: number;
 
     /**
      * Save formulae to the .f field
@@ -194,7 +199,7 @@ export interface ParsingOptions extends CommonOptions {
 /** Options for write and writeFile */
 export interface WritingOptions extends CommonOptions {
     /** Output data encoding */
-    type?: 'base64' | 'binary' | 'buffer' | 'file';
+    type?: 'base64' | 'binary' | 'buffer' | 'file' | 'array' | 'string';
 
     /**
      * Generate Shared String Table
@@ -235,11 +240,11 @@ export interface WorkBook {
     /** Ordered list of the sheet names in the workbook */
     SheetNames: string[];
 
-    /**
-     * an object storing the standard properties. wb.Custprops stores custom properties.
-     * Since the XLS standard properties deviate from the XLSX standard, XLS parsing stores core properties in both places.
-     */
+    /** Standard workbook Properties */
     Props?: FullProperties;
+
+    /** Custom workbook Properties */
+    Custprops?: object;
 
     Workbook?: WBProps;
 
@@ -319,13 +324,19 @@ export interface WBProps {
     Names?: DefinedName[];
 
     /** Workbook Views */
-    Views?: any[];
+    Views?: WBView[];
 
     /** Other Workbook Properties */
     WBProps?: WorkbookProperties;
 
     /* FEATURE[russa]: drawing/images */
     Drawings?: DrawingInfo[];
+}
+
+/** Workbook View */
+export interface WBView {
+    /** Right-to-left mode */
+    RTL?: boolean;
 }
 
 /** Other Workbook Properties */
@@ -543,7 +554,7 @@ export type ExcelDataType = 'b' | 'n' | 'e' | 's' | 'd' | 'z';
  * Type of generated workbook
  * @default 'xlsx'
  */
-export type BookType = 'xlsx' | 'xlsm' | 'xlsb' | 'xls' | 'biff8' | 'biff5' | 'biff2' | 'xlml' | 'ods' | 'fods' | 'csv' | 'txt' | 'sylk' | 'html' | 'dif' | 'rtf' | 'prn' | 'eth';
+export type BookType = 'xlsx' | 'xlsm' | 'xlsb' | 'xls' | 'xla' | 'biff8' | 'biff5' | 'biff2' | 'xlml' | 'ods' | 'fods' | 'csv' | 'txt' | 'sylk' | 'html' | 'dif' | 'rtf' | 'prn' | 'eth';
 
 /** Comment element */
 export interface Comment {
@@ -637,7 +648,15 @@ export interface Sheet2CSVOpts extends DateNFOption {
     skipHidden?: boolean;
 }
 
+export interface OriginOption {
+    /** Top-Left cell for operation (CellAddress or A1 string or row) */
+    origin?: number | string | CellAddress;
+}
+
 export interface Sheet2HTMLOpts {
+    /** TABLE element id attribute */
+    id?: string;
+
     /** Add contenteditable to every cell */
     editable?: boolean;
 
@@ -673,14 +692,30 @@ export interface AOA2SheetOpts extends CommonOptions, DateNFOption {
     sheetStubs?: boolean;
 }
 
+export interface SheetAOAOpts extends AOA2SheetOpts, OriginOption {}
+
 export interface JSON2SheetOpts extends CommonOptions, DateNFOption {
     /** Use specified column order */
     header?: string[];
+
+    /** Skip header row in generated sheet */
+    skipHeader?: boolean;
 }
+
+export interface SheetJSONOpts extends JSON2SheetOpts, OriginOption {}
 
 export interface Table2SheetOpts extends CommonOptions, DateNFOption {
     /* If true, plaintext parsing will not parse values */
     raw?: boolean;
+
+    /**
+     * If >0, read the first sheetRows rows
+     * @default 0
+     */
+    sheetRows?: number;
+
+    /** If true, hidden rows and cells will not be parsed */
+    display?: boolean;
 }
 
 export interface AddImagesOpts extends CommonOptions {
@@ -777,6 +812,9 @@ export interface XLSX$Utils {
     /** Converts A1 range to 0-indexed form */
     decode_range(range: string): Range;
 
+    /** Format cell */
+    format_cell(cell: CellObject, v?: any, opts?: any): string;
+
     /* --- General Utilities --- */
 
     /** Creates a new workbook */
@@ -802,6 +840,15 @@ export interface XLSX$Utils {
 
     /** Assign an Array Formula to a range */
     sheet_set_array_formula(ws: WorkSheet, range: Range|string, formula: string): WorkSheet;
+
+    /** Add an array of arrays of JS data to a worksheet */
+    sheet_add_aoa<T>(ws: WorkSheet, data: T[][], opts?: SheetAOAOpts): WorkSheet;
+    sheet_add_aoa(ws: WorkSheet, data: any[][], opts?: SheetAOAOpts): WorkSheet;
+
+    /** Add an array of JS objects to a worksheet */
+    sheet_add_json(ws: WorkSheet, data: any[], opts?: SheetJSONOpts): WorkSheet;
+    sheet_add_json<T>(ws: WorkSheet, data: T[], opts?: SheetJSONOpts): WorkSheet;
+
 
     consts: XLSX$Consts;
 
@@ -831,4 +878,6 @@ export interface StreamUtils {
     to_csv(sheet: WorkSheet, opts?: Sheet2CSVOpts): any;
     /** HTML output stream, generate one line at a time */
     to_html(sheet: WorkSheet, opts?: Sheet2HTMLOpts): any;
+    /** JSON object stream, generate one row at a time */
+    to_json(sheet: WorkSheet, opts?: Sheet2JSONOpts): any;
 }

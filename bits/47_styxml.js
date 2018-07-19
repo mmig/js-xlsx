@@ -1,10 +1,11 @@
 /* 18.8.5 borders CT_Borders */
 function parse_borders(t, styles, themes, opts) {
 	styles.Borders = [];
-	var border = {}, sub_border = {};
+	var border = {}/*, sub_border = {}*/;
+	var pass = false;
 	t[0].match(tagregex).forEach(function(x) {
 		var y = parsexmltag(x);
-		switch (y[0]) {
+		switch(strip_ns(y[0])) {
 			case '<borders': case '<borders>': case '</borders>': break;
 
 			/* 18.8.4 border CT_Border */
@@ -60,7 +61,13 @@ function parse_borders(t, styles, themes, opts) {
 			case '<color': case '<color>': break;
 			case '<color/>': case '</color>': break;
 
-			default: if(opts && opts.WTF) throw new Error('unrecognized ' + y[0] + ' in borders');
+			/* 18.2.10 extLst CT_ExtensionList ? */
+			case '<extLst': case '<extLst>': case '</extLst>': break;
+			case '<ext': pass = true; break;
+			case '</ext>': pass = false; break;
+			default: if(opts && opts.WTF) {
+				if(!pass) throw new Error('unrecognized ' + y[0] + ' in borders');
+			}
 		}
 	});
 }
@@ -69,9 +76,10 @@ function parse_borders(t, styles, themes, opts) {
 function parse_fills(t, styles, themes, opts) {
 	styles.Fills = [];
 	var fill = {};
+	var pass = false;
 	t[0].match(tagregex).forEach(function(x) {
 		var y = parsexmltag(x);
-		switch(y[0]) {
+		switch(strip_ns(y[0])) {
 			case '<fills': case '<fills>': case '</fills>': break;
 
 			/* 18.8.20 fill CT_Fill */
@@ -119,7 +127,13 @@ function parse_fills(t, styles, themes, opts) {
 			case '<color': case '<color/>': break;
 			case '</color>': break;
 
-			default: if(opts && opts.WTF) throw new Error('unrecognized ' + y[0] + ' in fills');
+			/* 18.2.10 extLst CT_ExtensionList ? */
+			case '<extLst': case '<extLst>': case '</extLst>': break;
+			case '<ext': pass = true; break;
+			case '</ext>': pass = false; break;
+			default: if(opts && opts.WTF) {
+				if(!pass) throw new Error('unrecognized ' + y[0] + ' in fills');
+			}
 		}
 	});
 }
@@ -128,9 +142,10 @@ function parse_fills(t, styles, themes, opts) {
 function parse_fonts(t, styles, themes, opts) {
 	styles.Fonts = [];
 	var font = {};
+	var pass = false;
 	t[0].match(tagregex).forEach(function(x) {
 		var y = parsexmltag(x);
-		switch (y[0]) {
+		switch(strip_ns(y[0])) {
 			case '<fonts': case '<fonts>': case '</fonts>': break;
 
 			/* 18.8.22 font CT_Font */
@@ -228,7 +243,13 @@ function parse_fonts(t, styles, themes, opts) {
 				break;
 			case '<color/>': case '</color>': break;
 
-			default: if(opts && opts.WTF) throw new Error('unrecognized ' + y[0] + ' in fonts');
+			/* 18.2.10 extLst CT_ExtensionList ? */
+			case '<extLst': case '<extLst>': case '</extLst>': break;
+			case '<ext': pass = true; break;
+			case '</ext>': pass = false; break;
+			default: if(opts && opts.WTF) {
+				if(!pass) throw new Error('unrecognized ' + y[0] + ' in fonts');
+			}
 		}
 	});
 }
@@ -242,7 +263,7 @@ function parse_numFmts(t, styles, opts) {
 	if(!m) return;
 	for(i=0; i < m.length; ++i) {
 		var y = parsexmltag(m[i]);
-		switch(y[0]) {
+		switch(strip_ns(y[0])) {
 			case '<numFmts': case '</numFmts>': case '<numFmts/>': case '<numFmts>': break;
 			case '<numFmt': {
 				var f=unescapexml(utf8read(y.formatCode)), j=parseInt(y.numFmtId,10);
@@ -261,7 +282,7 @@ function parse_numFmts(t, styles, opts) {
 	}
 }
 
-function write_numFmts(NF/*:{[n:number|string]:string}*/, opts) {
+function write_numFmts(NF/*:{[n:number|string]:string}*//*::, opts*/) {
 	var o = ["<numFmts>"];
 	[[5,8],[23,26],[41,44],[/*63*/50,/*66],[164,*/392]].forEach(function(r) {
 		for(var i = r[0]; i <= r[1]; ++i) if(NF[i] != null) o[o.length] = (writextag('numFmt',null,{numFmtId:i,formatCode:escapexml(NF[i])}));
@@ -278,9 +299,10 @@ var cellXF_bool = [ "applyAlignment", "applyBorder", "applyFill", "applyFont", "
 function parse_cellXfs(t, styles, opts) {
 	styles.CellXf = [];
 	var xf;
+	var pass = false;
 	t[0].match(tagregex).forEach(function(x) {
 		var y = parsexmltag(x), i = 0;
-		switch(y[0]) {
+		switch(strip_ns(y[0])) {
 			case '<cellXfs': case '<cellXfs>': case '<cellXfs/>': case '</cellXfs>': break;
 
 			/* 18.8.45 xf CT_Xf */
@@ -290,7 +312,7 @@ function parse_cellXfs(t, styles, opts) {
 				for(i = 0; i < cellXF_uint.length; ++i) if(xf[cellXF_uint[i]])
 					xf[cellXF_uint[i]] = parseInt(xf[cellXF_uint[i]], 10);
 				for(i = 0; i < cellXF_bool.length; ++i) if(xf[cellXF_bool[i]])
-					xf[cellXF_bool[i]] = parsexmlbool(xf[cellXF_bool[i]], "");
+					xf[cellXF_bool[i]] = parsexmlbool(xf[cellXF_bool[i]]);
 				if(xf.numFmtId > 0x188) {
 					for(i = 0x188; i > 0x3c; --i) if(styles.NumberFmt[xf.numFmtId] == styles.NumberFmt[i]) { xf.numFmtId = i; break; }
 				}
@@ -313,15 +335,18 @@ function parse_cellXfs(t, styles, opts) {
 			case '<protection': case '</protection>': case '<protection/>': break;
 
 			/* 18.2.10 extLst CT_ExtensionList ? */
-			case '<extLst': case '</extLst>': break;
-			case '<ext': break;
-			default: if(opts.WTF) throw new Error('unrecognized ' + y[0] + ' in cellXfs');
+			case '<extLst': case '<extLst>': case '</extLst>': break;
+			case '<ext': pass = true; break;
+			case '</ext>': pass = false; break;
+			default: if(opts && opts.WTF) {
+				if(!pass) throw new Error('unrecognized ' + y[0] + ' in cellXfs');
+			}
 		}
 	});
 }
 
 function write_cellXfs(cellXfs)/*:string*/ {
-	var o = [];
+	var o/*:Array<string>*/ = [];
 	o[o.length] = (writextag('cellXfs',null));
 	cellXfs.forEach(function(c) { o[o.length] = (writextag('xf', null, c)); });
 	o[o.length] = ("</cellXfs>");
@@ -332,11 +357,11 @@ function write_cellXfs(cellXfs)/*:string*/ {
 
 /* 18.8 Styles CT_Stylesheet*/
 var parse_sty_xml= (function make_pstyx() {
-var numFmtRegex = /<numFmts([^>]*)>[\S\s]*?<\/numFmts>/;
-var cellXfRegex = /<cellXfs([^>]*)>[\S\s]*?<\/cellXfs>/;
-var fillsRegex = /<fills([^>]*)>[\S\s]*?<\/fills>/;
-var fontsRegex = /<fonts([^>]*)>[\S\s]*?<\/fonts>/;
-var bordersRegex = /<borders([^>]*)>[\S\s]*?<\/borders>/;
+var numFmtRegex = /<(?:\w+:)?numFmts([^>]*)>[\S\s]*?<\/(?:\w+:)?numFmts>/;
+var cellXfRegex = /<(?:\w+:)?cellXfs([^>]*)>[\S\s]*?<\/(?:\w+:)?cellXfs>/;
+var fillsRegex = /<(?:\w+:)?fills([^>]*)>[\S\s]*?<\/(?:\w+:)?fills>/;
+var fontsRegex = /<(?:\w+:)?fonts([^>]*)>[\S\s]*?<\/(?:\w+:)?fonts>/;
+var bordersRegex = /<(?:\w+:)?borders([^>]*)>[\S\s]*?<\/(?:\w+:)?borders>/;
 
 return function parse_sty_xml(data, themes, opts) {
 	var styles = {};

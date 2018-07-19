@@ -46,7 +46,7 @@ function parse_clrScheme(t, themes, opts) {
 					themes.themeElements.clrScheme.push(color);
 					color = {};
 				} else {
-					color.name = y[0].substring(3, y[0].length - 1);
+					color.name = y[0].slice(3, y[0].length - 1);
 				}
 				break;
 
@@ -56,10 +56,10 @@ function parse_clrScheme(t, themes, opts) {
 }
 
 /* 20.1.4.1.18 fontScheme CT_FontScheme */
-function parse_fontScheme(t, themes, opts) { }
+function parse_fontScheme(/*::t, themes, opts*/) { }
 
 /* 20.1.4.1.15 fmtScheme CT_StyleMatrix */
-function parse_fmtScheme(t, themes, opts) { }
+function parse_fmtScheme(/*::t, themes, opts*/) { }
 
 var clrsregex = /<a:clrScheme([^>]*)>[\s\S]*<\/a:clrScheme>/;
 var fntsregex = /<a:fontScheme([^>]*)>[\s\S]*<\/a:fontScheme>/;

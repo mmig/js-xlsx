@@ -1,29 +1,30 @@
 var XML_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n';
-var attregexg=/([^"\s?>\/]+)=((?:")([^"]*)(?:")|(?:')([^']*)(?:')|([^'">\s]+))/g;
-var tagregex=/<[\/\?]?[a-zA-Z0-9:]+(?:\s+[^"\s?>\/]+=(?:"[^"]*"|'[^']*'|[^'">\s]+))*\s?[\/\?]?>/g;
+var attregexg=/([^"\s?>\/]+)\s*=\s*((?:")([^"]*)(?:")|(?:')([^']*)(?:')|([^'">\s]+))/g;
+var tagregex=/<[\/\?]?[a-zA-Z0-9:]+(?:\s+[^"\s?>\/]+\s*=\s*(?:"[^"]*"|'[^']*'|[^'">\s=]+))*\s?[\/\?]?>/g;
 if(!(XML_HEADER.match(tagregex))) tagregex = /<[^>]*>/g;
 var nsregex=/<\w*:/, nsregex2 = /<(\/?)\w+:/;
 function parsexmltag(tag/*:string*/, skip_root/*:?boolean*/)/*:any*/ {
 	var z = ({}/*:any*/);
 	var eq = 0, c = 0;
 	for(; eq !== tag.length; ++eq) if((c = tag.charCodeAt(eq)) === 32 || c === 10 || c === 13) break;
-	if(!skip_root) z[0] = tag.substr(0, eq);
+	if(!skip_root) z[0] = tag.slice(0, eq);
 	if(eq === tag.length) return z;
 	var m = tag.match(attregexg), j=0, v="", i=0, q="", cc="", quot = 1;
 	if(m) for(i = 0; i != m.length; ++i) {
 		cc = m[i];
 		for(c=0; c != cc.length; ++c) if(cc.charCodeAt(c) === 61) break;
-		q = cc.substr(0,c);
+		q = cc.slice(0,c).trim();
+		while(cc.charCodeAt(c+1) == 32) ++c;
 		quot = ((eq=cc.charCodeAt(c+1)) == 34 || eq == 39) ? 1 : 0;
-		v = cc.substring(c+1+quot, cc.length-quot);
+		v = cc.slice(c+1+quot, cc.length-quot);
 		for(j=0;j!=q.length;++j) if(q.charCodeAt(j) === 58) break;
 		if(j===q.length) {
-			if(q.indexOf("_") > 0) q = q.substr(0, q.indexOf("_")); // from ods
+			if(q.indexOf("_") > 0) q = q.slice(0, q.indexOf("_")); // from ods
 			z[q] = v;
 		}
 		else {
-			var k = (j===5 && q.substr(0,5)==="xmlns"?"xmlns":"")+q.substr(j+1);
-			if(z[k] && q.substr(j-3,3) == "ext") continue; // from ods
+			var k = (j===5 && q.slice(0,5)==="xmlns"?"xmlns":"")+q.slice(j+1);
+			if(z[k] && q.slice(j-3,j) == "ext") continue; // from ods
 			z[k] = v;
 		}
 	}
@@ -54,16 +55,21 @@ var unescapexml/*:StringConv*/ = (function() {
 })();
 
 var decregex=/[&<>'"]/g, charegex = /[\u0000-\u0008\u000b-\u001f]/g;
-function escapexml(text/*:string*/, xml/*:?boolean*/)/*:string*/{
+function escapexml(text/*:string*/)/*:string*/{
 	var s = text + '';
 	return s.replace(decregex, function(y) { return rencoding[y]; }).replace(charegex,function(s) { return "_x" + ("000"+s.charCodeAt(0).toString(16)).slice(-4) + "_";});
 }
 function escapexmltag(text/*:string*/)/*:string*/{ return escapexml(text).replace(/ /g,"_x0020_"); }
 
 var htmlcharegex = /[\u0000-\u001f]/g;
-function escapehtml(text){
+function escapehtml(text/*:string*/)/*:string*/{
 	var s = text + '';
 	return s.replace(decregex, function(y) { return rencoding[y]; }).replace(htmlcharegex,function(s) { return "&#x" + ("000"+s.charCodeAt(0).toString(16)).slice(-4) + ";"; });
+}
+
+function escapexlml(text/*:string*/)/*:string*/{
+	var s = text + '';
+	return s.replace(decregex, function(y) { return rencoding[y]; }).replace(htmlcharegex,function(s) { return "&#x" + (s.charCodeAt(0).toString(16)).toUpperCase() + ";"; });
 }
 
 /* TODO: handle codepages */
@@ -76,7 +82,7 @@ var xlml_unfixstr/*:StringConv*/ = (function() {
 	return function xlml_unfixstr(str/*:string*/)/*:string*/ { return str.replace(/(\r\n|[\r\n])/g,"\&#10;"); };
 })();
 
-function parsexmlbool(value/*:any*/, tag/*:?string*/)/*:boolean*/ {
+function parsexmlbool(value/*:any*/)/*:boolean*/ {
 	switch(value) {
 		case 1: case true: case '1': case 'true': case 'TRUE': return true;
 		/* case '0': case 'false': case 'FALSE':*/
@@ -84,7 +90,7 @@ function parsexmlbool(value/*:any*/, tag/*:?string*/)/*:boolean*/ {
 	}
 }
 
-var utf8read/*:StringConv*/ = function utf8reada(orig) {
+var utf8read/*:StringConv*/ = function utf8reada(orig/*:string*/)/*:string*/ {
 	var out = "", i = 0, c = 0, d = 0, e = 0, f = 0, w = 0;
 	while (i < orig.length) {
 		c = orig.charCodeAt(i++);
@@ -101,7 +107,7 @@ var utf8read/*:StringConv*/ = function utf8reada(orig) {
 	return out;
 };
 
-var utf8write/*:StringConv*/ = function(orig) {
+var utf8write/*:StringConv*/ = function(orig/*:string*/)/*:string*/ {
 	var out/*:Array<string>*/ = [], i = 0, c = 0, d = 0;
 	while(i < orig.length) {
 		c = orig.charCodeAt(i++);
@@ -129,7 +135,7 @@ var utf8write/*:StringConv*/ = function(orig) {
 
 if(has_buf) {
 	var utf8readb = function utf8readb(data) {
-		var out = new Buffer(2*data.length), w, i, j = 1, k = 0, ww=0, c;
+		var out = Buffer.alloc(2*data.length), w, i, j = 1, k = 0, ww=0, c;
 		for(i = 0; i < data.length; i+=j) {
 			j = 1;
 			if((c=data.charCodeAt(i)) < 128) w = c;
@@ -147,27 +153,28 @@ if(has_buf) {
 	var corpus = "foo bar baz\u00e2\u0098\u0083\u00f0\u009f\u008d\u00a3";
 	if(utf8read(corpus) == utf8readb(corpus)) utf8read = utf8readb;
 	// $FlowIgnore
-	var utf8readc = function utf8readc(data) { return Buffer(data, 'binary').toString('utf8'); };
+	var utf8readc = function utf8readc(data) { return Buffer_from(data, 'binary').toString('utf8'); };
 	if(utf8read(corpus) == utf8readc(corpus)) utf8read = utf8readc;
 
-	utf8write = function(data) { return new Buffer(data, 'utf8').toString("binary"); };
+	// $FlowIgnore
+	utf8write = function(data) { return Buffer_from(data, 'utf8').toString("binary"); };
 }
 
 // matches <foo>...</foo> extracts content
 var matchtag = (function() {
 	var mtcache/*:{[k:string]:RegExp}*/ = ({}/*:any*/);
-	return function matchtag(f,g/*:?string*/)/*:RegExp*/ {
+	return function matchtag(f/*:string*/,g/*:?string*/)/*:RegExp*/ {
 		var t = f+"|"+(g||"");
 		if(mtcache[t]) return mtcache[t];
 		return (mtcache[t] = new RegExp('<(?:\\w+:)?'+f+'(?: xml:space="preserve")?(?:[^>]*)>([\\s\\S]*?)</(?:\\w+:)?'+f+'>',((g||"")/*:any*/)));
 	};
 })();
 
-var htmldecode = (function() {
-	var entities = [
+var htmldecode/*:{(s:string):string}*/ = (function() {
+	var entities/*:Array<[RegExp, string]>*/ = [
 		['nbsp', ' '], ['middot', '·'],
 		['quot', '"'], ['apos', "'"], ['gt',   '>'], ['lt',   '<'], ['amp',  '&']
-	].map(function(x) { return [new RegExp('&' + x[0] + ';', "g"), x[1]]; });
+	].map(function(x/*:[string, string]*/) { return [new RegExp('&' + x[0] + ';', "g"), x[1]]; });
 	return function htmldecode(str/*:string*/)/*:string*/ {
 		var o = str.trim().replace(/\s+/g, " ").replace(/<\s*[bB][rR]\s*\/?>/g,"\n").replace(/<[^>]*>/g,"");
 		for(var i = 0; i < entities.length; ++i) o = o.replace(entities[i][0], entities[i][1]);
@@ -181,27 +188,27 @@ var vtregex = (function(){ var vt_cache = {};
 		return (vt_cache[bt] = new RegExp("<(?:vt:)?" + bt + ">([\\s\\S]*?)</(?:vt:)?" + bt + ">", 'g') );
 };})();
 var vtvregex = /<\/?(?:vt:)?variant>/g, vtmregex = /<(?:vt:)([^>]*)>([\s\S]*)</;
-function parseVector(data, opts) {
+function parseVector(data/*:string*/, opts)/*:Array<{v:string,t:string}>*/ {
 	var h = parsexmltag(data);
 
-	var matches = data.match(vtregex(h.baseType))||[];
-	var res = [];
+	var matches/*:Array<string>*/ = data.match(vtregex(h.baseType))||[];
+	var res/*:Array<any>*/ = [];
 	if(matches.length != h.size) {
 		if(opts.WTF) throw new Error("unexpected vector length " + matches.length + " != " + h.size);
 		return res;
 	}
-	matches.forEach(function(x) {
+	matches.forEach(function(x/*:string*/) {
 		var v = x.replace(vtvregex,"").match(vtmregex);
-		res.push({v:utf8read(v[2]), t:v[1]});
+		if(v) res.push({v:utf8read(v[2]), t:v[1]});
 	});
 	return res;
 }
 
 var wtregex = /(^\s|\s$|\n)/;
-function writetag(f,g) {return '<' + f + (g.match(wtregex)?' xml:space="preserve"' : "") + '>' + g + '</' + f + '>';}
+function writetag(f/*:string*/,g/*:string*/)/*:string*/ { return '<' + f + (g.match(wtregex)?' xml:space="preserve"' : "") + '>' + g + '</' + f + '>'; }
 
 function wxt_helper(h)/*:string*/ { return keys(h).map(function(k) { return " " + k + '="' + h[k] + '"';}).join(""); }
-function writextag(f,g,h) { return '<' + f + (isval(h) /*:: && h */? wxt_helper(h) : "") + (isval(g) /*:: && g */? (g.match(wtregex)?' xml:space="preserve"' : "") + '>' + g + '</' + f : "/") + '>';}
+function writextag(f/*:string*/,g/*:?string*/,h) { return '<' + f + ((h != null) ? wxt_helper(h) : "") + ((g != null) ? (g.match(wtregex)?' xml:space="preserve"' : "") + '>' + g + '</' + f : "/") + '>';}
 
 function write_w3cdtf(d/*:Date*/, t/*:?boolean*/)/*:string*/ { try { return d.toISOString().replace(/\.\d*/,""); } catch(e) { if(t) throw e; } return ""; }
 

@@ -1,5 +1,6 @@
 language: node_js
 node_js:
+  - "10"
   - "9"
   - "8"
   - "7"
@@ -27,6 +28,9 @@ matrix:
       env: TZ="America/Anchorage" FMTS=misc
     - node_js: "4"
       env: TZ="America/Barbados" FMTS=misc
+    # see GH issue #1150
+    - node_js: "4.4.7"
+      env: TZ="Asia/Tokyo" FMTS=misc
     - node_js: "0.12"
       env: TZ="America/Cayman" FMTS=misc
     - node_js: "0.10"
@@ -35,6 +39,7 @@ matrix:
       env: TZ="America/Mexico_City" FMTS=misc
 
 before_install:
+  - "npm config set strict-ssl false"
   - "npm install -g npm@4.3.0"
   - "npm install -g mocha@2.x voc"
   - "npm install blanket"

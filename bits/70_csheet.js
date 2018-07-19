@@ -6,7 +6,7 @@ var CS_XML_ROOT = writextag('chartsheet', null, {
 });
 
 /* 18.3 Worksheets also covers Chartsheets */
-function parse_cs_xml(data/*:?string*/, opts, idx/*:number*/, rels, wb, themes, styles)/*:Worksheet*/ {
+function parse_cs_xml(data/*:?string*/, opts, idx/*:number*/, rels, wb/*::, themes, styles*/)/*:Worksheet*/ {
 	if(!data) return data;
 	/* 18.3.1.12 chartsheet CT_ChartSheet */
 	if(!rels) rels = {'!id':{}};
@@ -39,11 +39,11 @@ function parse_BrtCsProp(data, length/*:number*/) {
 }
 
 /* [MS-XLSB] 2.1.7.7 Chart Sheet */
-function parse_cs_bin(data, opts, idx/*:number*/, rels, wb, themes, styles)/*:Worksheet*/ {
+function parse_cs_bin(data, opts, idx/*:number*/, rels, wb/*::, themes, styles*/)/*:Worksheet*/ {
 	if(!data) return data;
 	if(!rels) rels = {'!id':{}};
 	var s = {'!type':"chart", '!chart':null, '!rel':""};
-	var state = [];
+	var state/*:Array<string>*/ = [];
 	var pass = false;
 	recordhopper(data, function cs_parse(val, R_n, RT) {
 		switch(RT) {
@@ -56,7 +56,6 @@ function parse_cs_bin(data, opts, idx/*:number*/, rels, wb, themes, styles)/*:Wo
 				if(val.name) wb.Sheets[idx].CodeName = val.name;
 				break;
 
-			/* case 'BrtUid': */
 			case 0x0232: /* 'BrtBkHim' */
 			case 0x028C: /* 'BrtCsPageSetup' */
 			case 0x029D: /* 'BrtCsProtection' */
@@ -64,6 +63,7 @@ function parse_cs_bin(data, opts, idx/*:number*/, rels, wb, themes, styles)/*:Wo
 			case 0x0227: /* 'BrtLegacyDrawing' */
 			case 0x0228: /* 'BrtLegacyDrawingHF' */
 			case 0x01DC: /* 'BrtMargins' */
+			case 0x0C00: /* 'BrtUid' */
 				break;
 
 			case 0x0023: /* 'BrtFRTBegin' */
@@ -85,7 +85,7 @@ function parse_cs_bin(data, opts, idx/*:number*/, rels, wb, themes, styles)/*:Wo
 	if(rels['!id'][s['!rel']]) s['!chart'] = rels['!id'][s['!rel']];
 	return s;
 }
-function write_cs_bin(idx/*:number*/, opts, wb/*:Workbook*/, rels) {
+function write_cs_bin(/*::idx:number, opts, wb:Workbook, rels*/) {
 	var ba = buf_array();
 	write_record(ba, "BrtBeginSheet");
 	/* [BrtCsProp] */

@@ -40,8 +40,7 @@ Use readAsBinaryString: (when available) <input type="checkbox" name="userabs" c
 <div id="htmlout"></div>
 <br />
 <script src="https://unpkg.com/canvas-datagrid/dist/canvas-datagrid.js"></script>
-<script type="text/javascript" src="https://rawgit.com/eligrey/Blob.js/master/Blob.js"></script>
-<script type="text/javascript" src="https://rawgit.com/eligrey/FileSaver.js/master/FileSaver.js"></script>
+<script src="shim.js"></script>
 <script src="xlsx.full.min.js"></script>
 <script>
 /*jshint browser:true */
@@ -64,12 +63,17 @@ var process_wb = (function() {
 
 		/* update canvas-datagrid */
 		if(!cDg) cDg = canvasDatagrid({ parentNode:HTMLOUT, data:data });
+		cDg.style.height = '100%';
+		cDg.style.width = '100%';
 		cDg.data = data;
 		XPORT.disabled = false;
 
 		/* create schema (for A,B,C column headings) */
 		var range = XLSX.utils.decode_range(ws['!ref']);
 		for(var i = range.s.c; i <= range.e.c; ++i) cDg.schema[i - range.s.c].title = XLSX.utils.encode_col(i);
+
+		HTMLOUT.style.height = (window.innerHeight - 400) + "px";
+		HTMLOUT.style.width = (window.innerWidth - 50) + "px";
 
 		if(typeof console !== 'undefined') console.log("output", new Date());
 	};
@@ -136,12 +140,6 @@ var export_xlsx = (function() {
 		return out;
 	}
 
-	function s2ab(s) {
-		var b = new ArrayBuffer(s.length), v = new Uint8Array(b);
-		for (var i=0; i != s.length; ++i) v[i] = s.charCodeAt(i) & 0xFF;
-		return b;
-	}
-
 	return function export_xlsx() {
 		if(!cDg) return;
 		/* convert canvas-datagrid data to worksheet */
@@ -152,11 +150,7 @@ var export_xlsx = (function() {
 		XLSX.utils.book_append_sheet(new_wb, new_ws, 'SheetJS');
 
 		/* write file and trigger a download */
-		var wbout = XLSX.write(new_wb, {bookType:'xlsx', bookSST:true, type:'binary'});
-		var fname = 'sheetjs.xlsx';
-		try {
-			saveAs(new Blob([s2ab(wbout)],{type:"application/octet-stream"}), fname);
-		} catch(e) { if(typeof console != 'undefined') console.log(e, wbout); }
+		XLSX.writeFile(new_wb, 'sheetjs.xlsx', {bookSST:true});
 	};
 })();
 </script>

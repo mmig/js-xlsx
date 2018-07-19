@@ -2,7 +2,7 @@
 var parse_content_xml = (function() {
 
 	/* 6.1.2 White Space Characters */
-	var parse_text_p = function(text/*:string*/, tag)/*:string*/ {
+	var parse_text_p = function(text/*:string*//*::, tag*/)/*:string*/ {
 		return unescapexml(text
 			.replace(/[\t\r\n]/g, " ").trim().replace(/ +/g, " ")
 			.replace(/<text:s\/>/g," ")
@@ -45,13 +45,13 @@ var parse_content_xml = (function() {
 		var R = -1, C = -1, range = {s: {r:1000000,c:10000000}, e: {r:0, c:0}};
 		var row_ol = 0;
 		var number_format_map = {};
-		var merges = [], mrange = {}, mR = 0, mC = 0;
-		var rowinfo = [], rowpeat = 1, colpeat = 1;
-		var arrayf = [];
+		var merges/*:Array<Range>*/ = [], mrange = {}, mR = 0, mC = 0;
+		var rowinfo/*:Array<RowInfo>*/ = [], rowpeat = 1, colpeat = 1;
+		var arrayf/*:Array<[Range, string]>*/ = [];
 		var WB = {Names:[]};
 		var atag = ({}/*:any*/);
 		var _Ref/*:[string, string]*/ = ["", ""];
-		var comments = [], comment = {};
+		var comments/*:Array<Comment>*/ = [], comment/*:Comment*/ = ({}/*:any*/);
 		var creator = "", creatoridx = 0;
 		var isstub = false, intable = false;
 		var i = 0;
@@ -62,9 +62,15 @@ var parse_content_xml = (function() {
 			case 'table': case '工作表': // 9.1.2 <table:table>
 				if(Rn[1]==='/') {
 					if(range.e.c >= range.s.c && range.e.r >= range.s.r) ws['!ref'] = encode_range(range);
+					if(opts.sheetRows > 0 && opts.sheetRows <= range.e.r) {
+						ws['!fullref'] = ws['!ref'];
+						range.e.r = opts.sheetRows - 1;
+						ws['!ref'] = encode_range(range);
+					}
 					if(merges.length) ws['!merges'] = merges;
 					if(rowinfo.length) ws["!rows"] = rowinfo;
 					sheetag.name = utf8read(sheetag['名称'] || sheetag.name);
+					if(typeof JSON !== 'undefined') JSON.stringify(sheetag);
 					SheetNames.push(sheetag.name);
 					Sheets[sheetag.name] = ws;
 					intable = false;
@@ -117,12 +123,13 @@ var parse_content_xml = (function() {
 				} else if(Rn[1]!=='/') {
 					++C;
 					colpeat = 1;
+					var rptR = rowpeat ? R + rowpeat - 1 : R;
 					if(C > range.e.c) range.e.c = C;
-					if(R > range.e.r) range.e.r = R;
 					if(C < range.s.c) range.s.c = C;
 					if(R < range.s.r) range.s.r = R;
+					if(rptR > range.e.r) range.e.r = rptR;
 					ctag = parsexmltag(Rn[0], false);
-					comments = []; comment = {};
+					comments = []; comment = ({}/*:any*/);
 					q = ({t:ctag['数据类型'] || ctag['value-type'], v:null/*:: , z:null, w:"",c:[]*/}/*:any*/);
 					if(opts.cellFormula) {
 						if(ctag.formula) ctag.formula = unescapexml(ctag.formula);
@@ -176,7 +183,7 @@ var parse_content_xml = (function() {
 					if(comments.length > 0) { q.c = comments; comments = []; }
 					if(textp && opts.cellText !== false) q.w = textp;
 					if(!isstub || opts.sheetStubs) {
-						if(!(opts.sheetRows && opts.sheetRows < R)) {
+						if(!(opts.sheetRows && opts.sheetRows <= R)) {
 							for(var rpt = 0; rpt < rowpeat; ++rpt) {
 								colpeat = parseInt(ctag['number-columns-repeated']||"1", 10);
 								if(opts.dense) {
@@ -537,7 +544,7 @@ var parse_content_xml = (function() {
 function parse_ods(zip/*:ZIPFile*/, opts/*:?ParseOpts*/)/*:Workbook*/ {
 	opts = opts || ({}/*:any*/);
 	var ods = !!safegetzipfile(zip, 'objectdata');
-	if(ods) var manifest = parse_manifest(getzipdata(zip, 'META-INF/manifest.xml'), opts);
+	if(ods) parse_manifest(getzipdata(zip, 'META-INF/manifest.xml'), opts);
 	var content = getzipstr(zip, 'content.xml');
 	if(!content) throw new Error("Missing content.xml in " + (ods ? "ODS" : "UOF")+ " file");
 	var wb = parse_content_xml(ods ? content : utf8read(content), opts);

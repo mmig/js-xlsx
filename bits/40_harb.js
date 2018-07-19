@@ -66,17 +66,17 @@ function dbf_to_aoa(buf, opts)/*:AOA*/ {
 		case 0xF5: memo = true; break;
 		default: throw new Error("DBF Unsupported Version: " + ft.toString(16));
 	}
-	var filedate = new Date(), nrow = 0, fpos = 0;
+	var /*filedate = new Date(),*/ nrow = 0, fpos = 0;
 	if(ft == 0x02) nrow = d.read_shift(2);
-	filedate = new Date(d.read_shift(1) + 1900, d.read_shift(1) - 1, d.read_shift(1));
+	/*filedate = new Date(d.read_shift(1) + 1900, d.read_shift(1) - 1, d.read_shift(1));*/d.l += 3;
 	if(ft != 0x02) nrow = d.read_shift(4);
 	if(ft != 0x02) fpos = d.read_shift(2);
 	var rlen = d.read_shift(2);
 
-	var flags = 0, current_cp = 1252;
+	var /*flags = 0,*/ current_cp = 1252;
 	if(ft != 0x02) {
 	d.l+=16;
-	flags = d.read_shift(1);
+	/*flags = */d.read_shift(1);
 	//if(memo && ((flags & 0x02) === 0)) throw new Error("DBF Flags " + flags.toString(16) + " ft " + ft.toString(16));
 
 	/* codepage present in FoxPro */
@@ -86,10 +86,11 @@ function dbf_to_aoa(buf, opts)/*:AOA*/ {
 	d.l+=2;
 	}
 	if(l7) d.l += 36;
-	var fields = [], field = {};
+/*:: type DBFField = { name:string; len:number; type:string; } */
+	var fields/*:Array<DBFField>*/ = [], field/*:DBFField*/ = ({}/*:any*/);
 	var hend = fpos - 10 - (vfp ? 264 : 0), ww = l7 ? 32 : 11;
 	while(ft == 0x02 ? d.l < d.length && d[d.l] != 0x0d: d.l < hend) {
-		field = {};
+		field = ({}/*:any*/);
 		field.name = cptable.utils.decode(current_cp, d.slice(d.l, d.l+ww)).replace(/[\u0000\r\n].*$/g,"");
 		d.l += ww;
 		field.type = String.fromCharCode(d.read_shift(1));
@@ -148,7 +149,7 @@ function dbf_to_aoa(buf, opts)/*:AOA*/ {
 					out[R][C] = out[R][C].trim();
 					break;
 				case 'D':
-					if(s.length === 8) out[R][C] = new Date(+s.substr(0,4), +s.substr(4,2)-1, +s.substr(6,2));
+					if(s.length === 8) out[R][C] = new Date(+s.slice(0,4), +s.slice(4,6)-1, +s.slice(6,8));
 					else out[R][C] = s;
 					break;
 				case 'F': out[R][C] = parseFloat(s.trim()); break;
@@ -179,6 +180,7 @@ function dbf_to_aoa(buf, opts)/*:AOA*/ {
 		}
 	}
 	if(ft != 0x02) if(d.l < d.length && d[d.l++] != 0x1A) throw new Error("DBF EOF Marker missing " + (d.l-1) + " of " + d.length + " " + d[d.l-1].toString(16));
+	if(opts && opts.sheetRows) out = out.slice(0, opts.sheetRows);
 	return out;
 }
 
@@ -205,12 +207,13 @@ function sheet_to_dbf(ws/*:Worksheet*/, opts/*:WriteOpts*/) {
 	for(i = 0; i < headers.length; ++i) {
 		if(i == null) continue;
 		++hcnt;
-		if(typeof headers[i] !== 'string') throw new Error("DBF Invalid column name");
+		if(typeof headers[i] === 'number') headers[i] = headers[i].toString(10);
+		if(typeof headers[i] !== 'string') throw new Error("DBF Invalid column name " + headers[i] + " |" + (typeof headers[i]) + "|");
 		if(headers.indexOf(headers[i]) !== i) for(j=0; j<1024;++j)
 			if(headers.indexOf(headers[i] + "_" + j) == -1) { headers[i] += "_" + j; break; }
 	}
 	var range = safe_decode_range(ws['!ref']);
-	var coltypes = [];
+	var coltypes/*:Array<string>*/ = [];
 	for(i = 0; i <= range.e.c - range.s.c; ++i) {
 		var col/*:Array<any>*/ = [];
 		for(j=0; j < data.length; ++j) {
@@ -307,10 +310,10 @@ var SYLK = (function() {
 		throw new Error("Unrecognized type " + opts.type);
 	}
 	function sylk_to_aoa_str(str/*:string*/, opts)/*:[AOA, Worksheet]*/ {
-		var records = str.split(/[\n\r]+/), R = -1, C = -1, ri = 0, rj = 0, arr = [];
-		var formats = [];
-		var next_cell_format = null;
-		var sht = {}, rowinfo = [], colinfo = [], cw = [];
+		var records = str.split(/[\n\r]+/), R = -1, C = -1, ri = 0, rj = 0, arr/*:AOA*/ = [];
+		var formats/*:Array<string>*/ = [];
+		var next_cell_format/*:string|null*/ = null;
+		var sht = {}, rowinfo/*:Array<RowInfo>*/ = [], colinfo/*:Array<ColInfo>*/ = [], cw/*:Array<string>*/ = [];
 		var Mval = 0, j;
 		for (; ri !== records.length; ++ri) {
 			Mval = 0;
@@ -324,18 +327,19 @@ var SYLK = (function() {
 			case 'O': break; /* options? */
 			case 'P':
 				if(record[1].charAt(0) == 'P')
-					formats.push(rstr.substr(3).replace(/;;/g, ";"));
+					formats.push(rstr.slice(3).replace(/;;/g, ";"));
 				break;
 			case 'C':
+			var C_seen_K = false, C_seen_X = false;
 			for(rj=1; rj<record.length; ++rj) switch(record[rj].charAt(0)) {
-				case 'X': C = parseInt(record[rj].substr(1))-1; break;
+				case 'X': C = parseInt(record[rj].slice(1))-1; C_seen_X = true; break;
 				case 'Y':
-					R = parseInt(record[rj].substr(1))-1; C = 0;
+					R = parseInt(record[rj].slice(1))-1; if(!C_seen_X) C = 0;
 					for(j = arr.length; j <= R; ++j) arr[j] = [];
 					break;
 				case 'K':
-					val = record[rj].substr(1);
-					if(val.charAt(0) === '"') val = val.substr(1,val.length - 2);
+					val = record[rj].slice(1);
+					if(val.charAt(0) === '"') val = val.slice(1,val.length - 1);
 					else if(val === 'TRUE') val = true;
 					else if(val === 'FALSE') val = false;
 					else if(!isNaN(fuzzynum(val))) {
@@ -344,43 +348,46 @@ var SYLK = (function() {
 					} else if(!isNaN(fuzzydate(val).getDate())) {
 						val = parseDate(val);
 					}
-					arr[R][C] = val;
-					next_cell_format = null;
+					if(typeof cptable !== 'undefined' && typeof val == "string" && ((opts||{}).type != "string") && (opts||{}).codepage) val = cptable.utils.decode(opts.codepage, val);
+					C_seen_K = true;
 					break;
 				case 'E':
-					var formula = rc_to_a1(record[rj].substr(1), {r:R,c:C});
+					var formula = rc_to_a1(record[rj].slice(1), {r:R,c:C});
 					arr[R][C] = [arr[R][C], formula];
 					break;
 				default: if(opts && opts.WTF) throw new Error("SYLK bad record " + rstr);
-			} break;
+			}
+			if(C_seen_K) { arr[R][C] = val; next_cell_format = null; }
+			break;
 			case 'F':
 			var F_seen = 0;
 			for(rj=1; rj<record.length; ++rj) switch(record[rj].charAt(0)) {
-				case 'X': C = parseInt(record[rj].substr(1))-1; ++F_seen; break;
+				case 'X': C = parseInt(record[rj].slice(1))-1; ++F_seen; break;
 				case 'Y':
-					R = parseInt(record[rj].substr(1))-1; /*C = 0;*/
+					R = parseInt(record[rj].slice(1))-1; /*C = 0;*/
 					for(j = arr.length; j <= R; ++j) arr[j] = [];
 					break;
-				case 'M': Mval = parseInt(record[rj].substr(1)) / 20; break;
+				case 'M': Mval = parseInt(record[rj].slice(1)) / 20; break;
 				case 'F': break; /* ??? */
+				case 'G': break; /* hide grid */
 				case 'P':
-					next_cell_format = formats[parseInt(record[rj].substr(1))];
+					next_cell_format = formats[parseInt(record[rj].slice(1))];
 					break;
 				case 'S': break; /* cell style */
 				case 'D': break; /* column */
 				case 'N': break; /* font */
 				case 'W':
-					cw = record[rj].substr(1).split(" ");
+					cw = record[rj].slice(1).split(" ");
 					for(j = parseInt(cw[0], 10); j <= parseInt(cw[1], 10); ++j) {
 						Mval = parseInt(cw[2], 10);
 						colinfo[j-1] = Mval === 0 ? {hidden:true}: {wch:Mval}; process_col(colinfo[j-1]);
 					} break;
 				case 'C': /* default column format */
-					C = parseInt(record[rj].substr(1))-1;
+					C = parseInt(record[rj].slice(1))-1;
 					if(!colinfo[C]) colinfo[C] = {};
 					break;
 				case 'R': /* row properties */
-					R = parseInt(record[rj].substr(1))-1;
+					R = parseInt(record[rj].slice(1))-1;
 					if(!rowinfo[R]) rowinfo[R] = {};
 					if(Mval > 0) { rowinfo[R].hpt = Mval; rowinfo[R].hpx = pt2px(Mval); }
 					else if(Mval === 0) rowinfo[R].hidden = true;
@@ -393,6 +400,7 @@ var SYLK = (function() {
 		}
 		if(rowinfo.length > 0) sht['!rows'] = rowinfo;
 		if(colinfo.length > 0) sht['!cols'] = colinfo;
+		if(opts && opts.sheetRows) arr = arr.slice(0, opts.sheetRows);
 		return [arr, sht];
 	}
 
@@ -406,7 +414,7 @@ var SYLK = (function() {
 
 	function sylk_to_workbook(d/*:RawData*/, opts)/*:Workbook*/ { return sheet_to_workbook(sylk_to_sheet(d, opts), opts); }
 
-	function write_ws_cell_sylk(cell/*:Cell*/, ws/*:Worksheet*/, R/*:number*/, C/*:number*/, opts)/*:string*/ {
+	function write_ws_cell_sylk(cell/*:Cell*/, ws/*:Worksheet*/, R/*:number*/, C/*:number*//*::, opts*/)/*:string*/ {
 		var o = "C;Y" + (R+1) + ";X" + (C+1) + ";K";
 		switch(cell.t) {
 			case 'n':
@@ -459,7 +467,7 @@ var SYLK = (function() {
 			for(var C = r.s.c; C <= r.e.c; ++C) {
 				var coord = encode_cell({r:R,c:C});
 				cell = dense ? (ws[R]||[])[C]: ws[coord];
-				if(!cell || cell.v == null && (!cell.f || cell.F)) continue;
+				if(!cell || (cell.v == null && (!cell.f || cell.F))) continue;
 				o.push(write_ws_cell_sylk(cell, ws, R, C, opts));
 			}
 		}
@@ -484,7 +492,7 @@ var DIF = (function() {
 		throw new Error("Unrecognized type " + opts.type);
 	}
 	function dif_to_aoa_str(str/*:string*/, opts)/*:AOA*/ {
-		var records = str.split('\n'), R = -1, C = -1, ri = 0, arr = [];
+		var records = str.split('\n'), R = -1, C = -1, ri = 0, arr/*:AOA*/ = [];
 		for (; ri !== records.length; ++ri) {
 			if (records[ri].trim() === 'BOT') { arr[++R] = []; C = 0; continue; }
 			if (R < 0) continue;
@@ -505,12 +513,13 @@ var DIF = (function() {
 					else arr[R][C] = value;
 					++C; break;
 				case 1:
-					data = data.substr(1,data.length-2);
+					data = data.slice(1,data.length-1);
 					arr[R][C++] = data !== '' ? data : null;
 					break;
 			}
 			if (data === 'EOD') break;
 		}
+		if(opts && opts.sheetRows) arr = arr.slice(0, opts.sheetRows);
 		return arr;
 	}
 
@@ -527,7 +536,7 @@ var DIF = (function() {
 			o.push(type + "," + v);
 			o.push(type == 1 ? '"' + s.replace(/"/g,'""') + '"' : s);
 		};
-		return function sheet_to_dif(ws/*:Worksheet*/, opts/*:?any*/)/*:string*/ {
+		return function sheet_to_dif(ws/*:Worksheet*//*::, opts:?any*/)/*:string*/ {
 			var o/*:Array<string>*/ = [];
 			var r = safe_decode_range(ws['!ref']), cell/*:Cell*/;
 			var dense = Array.isArray(ws);
@@ -585,7 +594,7 @@ var ETH = (function() {
 	function encode(s/*:string*/)/*:string*/ { return s.replace(/\\/g, "\\b").replace(/:/g, "\\c").replace(/\n/g,"\\n"); }
 
 	function eth_to_aoa(str/*:string*/, opts)/*:AOA*/ {
-		var records = str.split('\n'), R = -1, C = -1, ri = 0, arr = [];
+		var records = str.split('\n'), R = -1, C = -1, ri = 0, arr/*:AOA*/ = [];
 		for (; ri !== records.length; ++ri) {
 			var record = records[ri].trim().split(":");
 			if(record[0] !== 'cell') continue;
@@ -605,6 +614,7 @@ var ETH = (function() {
 					if(record[2] == 'vtf') arr[R][C] = [arr[R][C], _f];
 			}
 		}
+		if(opts && opts.sheetRows) arr = arr.slice(0, opts.sheetRows);
 		return arr;
 	}
 
@@ -632,7 +642,7 @@ var ETH = (function() {
 
 	function sheet_to_eth_data(ws/*:Worksheet*/)/*:string*/ {
 		if(!ws || !ws['!ref']) return "";
-		var o = [], oo = [], cell, coord;
+		var o/*:Array<string>*/ = [], oo/*:Array<string>*/ = [], cell, coord = "";
 		var r = decode_range(ws['!ref']);
 		var dense = Array.isArray(ws);
 		for(var R = r.s.r; R <= r.e.r; ++R) {
@@ -648,12 +658,12 @@ var ETH = (function() {
 						else { oo[2]='vtf'; oo[3]='n'; oo[4]=cell.v; oo[5]=encode(cell.f); }
 						break;
 					case 'b':
-						oo[2] = 'vt'+(cell.f?'f':'c'); oo[3]='nl'; oo[4]=+!!cell.v;
+						oo[2] = 'vt'+(cell.f?'f':'c'); oo[3]='nl'; oo[4]=cell.v?"1":"0";
 						oo[5] = encode(cell.f||(cell.v?'TRUE':'FALSE'));
 						break;
 					case 'd':
 						var t = datenum(parseDate(cell.v));
-						oo[2] = 'vtc'; oo[3] = 'nd'; oo[4] = t;
+						oo[2] = 'vtc'; oo[3] = 'nd'; oo[4] = ""+t;
 						oo[5] = cell.w || SSF.format(cell.z || SSF._table[14], t);
 						break;
 					case 'e': continue;
@@ -667,7 +677,7 @@ var ETH = (function() {
 		return o.join("\n");
 	}
 
-	function sheet_to_eth(ws/*:Worksheet*/, opts/*:?any*/)/*:string*/ {
+	function sheet_to_eth(ws/*:Worksheet*//*::, opts:?any*/)/*:string*/ {
 		return [header, sep, meta, sep, sheet_to_eth_data(ws), end].join("\n");
 		// return ["version:1.5", sheet_to_eth_data(ws)].join("\n"); // clipboard form
 	}
@@ -712,6 +722,7 @@ var PRN = (function() {
 			for(C = 1; C <= (lines[R].length - start)/10 + 1; ++C)
 				set_text_arr(lines[R].slice(start+(C-1)*10,start+C*10).trim(),arr,R,C,o);
 		}
+		if(o.sheetRows) arr = arr.slice(0, o.sheetRows);
 		return arr;
 	}
 
@@ -760,8 +771,8 @@ var PRN = (function() {
 		var ws/*:Worksheet*/ = o.dense ? ([]/*:any*/) : ({}/*:any*/);
 		var range/*:Range*/ = ({s: {c:0, r:0}, e: {c:0, r:0}}/*:any*/);
 
-		if(str.substr(0,4) == "sep=" && str.charCodeAt(5) == 10) { sep = str.charAt(4); str = str.substr(6); }
-		else sep = guess_sep(str.substr(0,1024));
+		if(str.slice(0,4) == "sep=" && str.charCodeAt(5) == 10) { sep = str.charAt(4); str = str.slice(6); }
+		else sep = guess_sep(str.slice(0,1024));
 		var R = 0, C = 0, v = 0;
 		var start = 0, end = 0, sepcc = sep.charCodeAt(0), instr = false, cc=0;
 		str = str.replace(/\r\n/mg, "\n");
@@ -775,7 +786,7 @@ var PRN = (function() {
 			else if(s.trim().length === 0) { cell.t = 's'; cell.v = s; }
 			else if(s.charCodeAt(0) == 0x3D) {
 				if(s.charCodeAt(1) == 0x22 && s.charCodeAt(s.length - 1) == 0x22) { cell.t = 's'; cell.v = s.slice(2,-1).replace(/""/g,'"'); }
-				else if(fuzzyfmla(s)) { cell.t = 'n'; cell.f = s.substr(1); }
+				else if(fuzzyfmla(s)) { cell.t = 'n'; cell.f = s.slice(1); }
 				else { cell.t = 's'; cell.v = s; } }
 			else if(s == "TRUE") { cell.t = 'b'; cell.v = true; }
 			else if(s == "FALSE") { cell.t = 'b'; cell.v = false; }
@@ -798,11 +809,11 @@ var PRN = (function() {
 			start = end+1;
 			if(range.e.c < C) range.e.c = C;
 			if(range.e.r < R) range.e.r = R;
-			if(cc == sepcc) ++C; else { C = 0; ++R; }
+			if(cc == sepcc) ++C; else { C = 0; ++R; if(o.sheetRows && o.sheetRows <= R) return true; }
 		}
-		for(;end < str.length;++end) switch((cc=str.charCodeAt(end))) {
+		outer: for(;end < str.length;++end) switch((cc=str.charCodeAt(end))) {
 			case 0x22: instr = !instr; break;
-			case sepcc: case 0x0a: case 0x0d: if(!instr) finish_cell(); break;
+			case sepcc: case 0x0a: case 0x0d: if(!instr && finish_cell()) break outer; break;
 			default: break;
 		}
 		if(end - start > 0) finish_cell();
@@ -835,17 +846,17 @@ var PRN = (function() {
 
 	function prn_to_workbook(d/*:RawData*/, opts)/*:Workbook*/ { return sheet_to_workbook(prn_to_sheet(d, opts), opts); }
 
-	function sheet_to_prn(ws/*:Worksheet*/, opts/*:?any*/)/*:string*/ {
+	function sheet_to_prn(ws/*:Worksheet*//*::, opts:?any*/)/*:string*/ {
 		var o/*:Array<string>*/ = [];
 		var r = safe_decode_range(ws['!ref']), cell/*:Cell*/;
 		var dense = Array.isArray(ws);
 		for(var R = r.s.r; R <= r.e.r; ++R) {
-			var oo = [];
+			var oo/*:Array<string>*/ = [];
 			for(var C = r.s.c; C <= r.e.c; ++C) {
 				var coord = encode_cell({r:R,c:C});
 				cell = dense ? (ws[R]||[])[C] : ws[coord];
 				if(!cell || cell.v == null) { oo.push("          "); continue; }
-				var w = (cell.w || (format_cell(cell), cell.w) || "").substr(0,10);
+				var w = (cell.w || (format_cell(cell), cell.w) || "").slice(0,10);
 				while(w.length < 10) w += " ";
 				oo.push(w + (C === 0 ? " " : ""));
 			}

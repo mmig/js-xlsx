@@ -18,16 +18,21 @@ can be installed with Bash on Windows or with `cygwin`.
 ### Included Demos
 
 **Frameworks and APIs**
-- [`angular 1.x`](angular/)
-- [`angular 2.x / 4.x / 5.x`](angular2/)
+- [`angularjs`](angular/)
+- [`angular 2 / 4 / 5 / 6 and ionic`](angular2/)
+- [`knockout`](knockout/)
 - [`meteor`](meteor/)
 - [`react and react-native`](react/)
 - [`vue 2.x and weex`](vue/)
 - [`XMLHttpRequest and fetch`](xhr/)
 - [`nodejs server`](server/)
+- [`databases and key/value stores`](database/)
+- [`typed arrays and math`](array/)
 
 **Bundlers and Tooling**
 - [`browserify`](browserify/)
+- [`fusebox`](fusebox/)
+- [`parcel`](parcel/)
 - [`requirejs`](requirejs/)
 - [`rollup`](rollup/)
 - [`systemjs`](systemjs/)
@@ -37,9 +42,12 @@ can be installed with Bash on Windows or with `cygwin`.
 **Platforms and Integrations**
 - [`electron application`](electron/)
 - [`nw.js application`](nwjs/)
+- [`Chrome / Chromium extensions`](chrome/)
 - [`Adobe ExtendScript`](extendscript/)
 - [`Headless Browsers`](headless/)
 - [`canvas-datagrid`](datagrid/)
 - [`Swift JSC and other engines`](altjs/)
+- [`"serverless" functions`](function/)
+- [`internet explorer`](oldie/)
 
 [![Analytics](https://ga-beacon.appspot.com/UA-36810333-1/SheetJS/js-xlsx?pixel)](https://github.com/SheetJS/js-xlsx)

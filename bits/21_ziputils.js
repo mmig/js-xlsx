@@ -13,7 +13,7 @@ function getdatabin(data) {
 	if(data.asNodeBuffer && has_buf) return data.asNodeBuffer();
 	if(data._data && data._data.getContent) {
 		var o = data._data.getContent();
-		if(typeof o == "string") return str2cc(o);
+		if(typeof o == "string") return char_codes(o);
 		return Array.prototype.slice.call(o);
 	}
 	return null;
@@ -51,14 +51,19 @@ function getzipstr(zip, file/*:string*/, safe/*:?boolean*/)/*:?string*/ {
 	try { return getzipstr(zip, file); } catch(e) { return null; }
 }
 
-var _fs, jszip;
-/*:: declare var JSZip:any; */
-/*global JSZip:true */
-if(typeof JSZip !== 'undefined') jszip = JSZip;
-if (typeof exports !== 'undefined') {
-	if (typeof module !== 'undefined' && module.exports) {
+function zipentries(zip) {
+	var k = keys(zip.files), o = [];
+	for(var i = 0; i < k.length; ++i) if(k[i].slice(-1) != '/') o.push(k[i]);
+	return o.sort();
+}
+
+var jszip;
+/*:: declare var JSZipSync:any; */
+/*global JSZipSync:true */
+if(typeof JSZipSync !== 'undefined') jszip = JSZipSync;
+if(typeof exports !== 'undefined') {
+	if(typeof module !== 'undefined' && module.exports) {
 		if(typeof jszip === 'undefined') jszip = require('./jszip.js');
-		try { _fs = require('fs'); } catch(e) { }
 	}
 }
 

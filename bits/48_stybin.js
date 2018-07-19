@@ -1,4 +1,4 @@
-/* [MS-XLSB] 2.4.651 BrtFmt */
+/* [MS-XLSB] 2.4.657 BrtFmt */
 function parse_BrtFmt(data, length/*:number*/) {
 	var numFmtId = data.read_shift(2);
 	var stFmtCode = parse_XLWideString(data,length-2);
@@ -8,10 +8,12 @@ function write_BrtFmt(i/*:number*/, f/*:string*/, o) {
 	if(!o) o = new_buf(6 + 4 * f.length);
 	o.write_shift(2, i);
 	write_XLWideString(f, o);
-	return o.length > o.l ? o.slice(0, o.l) : o;
+	var out = (o.length > o.l) ? o.slice(0, o.l) : o;
+	if(o.l == null) o.l = o.length;
+	return out;
 }
 
-/* [MS-XLSB] 2.4.653 BrtFont TODO */
+/* [MS-XLSB] 2.4.659 BrtFont TODO */
 function parse_BrtFont(data, length/*:number*/, opts) {
 	var out = ({}/*:any*/);
 
@@ -56,7 +58,7 @@ function parse_BrtFont(data, length/*:number*/, opts) {
 
 	return out;
 }
-function write_BrtFont(font, o) {
+function write_BrtFont(font/*:any*/, o) {
 	if(!o) o = new_buf(25+4*32);
 	o.write_shift(2, font.sz * 20);
 	write_FontFlags(font, o);
@@ -78,7 +80,7 @@ function write_BrtFont(font, o) {
 	return o.length > o.l ? o.slice(0, o.l) : o;
 }
 
-/* [MS-XLSB] 2.4.644 BrtFill */
+/* [MS-XLSB] 2.4.650 BrtFill */
 var XLSBFillPTNames = [
 	"none",
 	"solid",
@@ -132,7 +134,7 @@ function write_BrtFill(fill, o) {
 	return o.length > o.l ? o.slice(0, o.l) : o;
 }
 
-/* [MS-XLSB] 2.4.816 BrtXF */
+/* [MS-XLSB] 2.4.824 BrtXF */
 function parse_BrtXF(data, length/*:number*/) {
 	var tgt = data.l + length;
 	var ixfeParent = data.read_shift(2);
@@ -165,7 +167,7 @@ function write_Blxf(data, o) {
 	o.write_shift(4, 0); /* color */
 	return o;
 }
-/* [MS-XLSB] 2.4.299 BrtBorder TODO */
+/* [MS-XLSB] 2.4.302 BrtBorder TODO */
 var parse_BrtBorder = parsenoop;
 function write_BrtBorder(border, o) {
 	if(!o) o = new_buf(51);
@@ -178,7 +180,7 @@ function write_BrtBorder(border, o) {
 	return o.length > o.l ? o.slice(0, o.l) : o;
 }
 
-/* [MS-XLSB] 2.4.755 BrtStyle TODO */
+/* [MS-XLSB] 2.4.763 BrtStyle TODO */
 function write_BrtStyle(style, o) {
 	if(!o) o = new_buf(12+4*10);
 	o.write_shift(4, style.xfId);
@@ -189,7 +191,7 @@ function write_BrtStyle(style, o) {
 	return o.length > o.l ? o.slice(0, o.l) : o;
 }
 
-/* [MS-XLSB] 2.4.269 BrtBeginTableStyles */
+/* [MS-XLSB] 2.4.272 BrtBeginTableStyles */
 function write_BrtBeginTableStyles(cnt, defTableStyle, defPivotStyle) {
 	var o = new_buf(4+256*2*4);
 	o.write_shift(4, cnt);
@@ -206,7 +208,7 @@ function parse_sty_bin(data, themes, opts) {
 
 	styles.CellXf = [];
 	styles.Fonts = [];
-	var state = [];
+	var state/*:Array<string>*/ = [];
 	var pass = false;
 	recordhopper(data, function hopper_sty(val, R_n, RT) {
 		switch(RT) {
@@ -238,7 +240,7 @@ function parse_sty_bin(data, themes, opts) {
 			case 0x046A: /* 'BrtSlicerStyleElement' */
 			case 0x0200: /* 'BrtTableStyleElement' */
 			case 0x082F: /* 'BrtTimelineStyleElement' */
-			/* case 'BrtUid' */
+			case 0x0C00: /* 'BrtUid' */
 				break;
 
 			case 0x0023: /* 'BrtFRTBegin' */
@@ -276,7 +278,7 @@ function write_FMTS_bin(ba, NF/*:?SSFTable*/) {
 	write_record(ba, "BrtEndFmts");
 }
 
-function write_FONTS_bin(ba, data) {
+function write_FONTS_bin(ba/*::, data*/) {
 	var cnt = 1;
 
 	if(cnt == 0) return;
@@ -292,7 +294,7 @@ function write_FONTS_bin(ba, data) {
 	write_record(ba, "BrtEndFonts");
 }
 
-function write_FILLS_bin(ba, data) {
+function write_FILLS_bin(ba/*::, data*/) {
 	var cnt = 2;
 
 	if(cnt == 0) return;
@@ -303,7 +305,7 @@ function write_FILLS_bin(ba, data) {
 	write_record(ba, "BrtEndFills");
 }
 
-function write_BORDERS_bin(ba, data) {
+function write_BORDERS_bin(ba/*::, data*/) {
 	var cnt = 1;
 
 	if(cnt == 0) return;
@@ -313,7 +315,7 @@ function write_BORDERS_bin(ba, data) {
 	write_record(ba, "BrtEndBorders");
 }
 
-function write_CELLSTYLEXFS_bin(ba, data) {
+function write_CELLSTYLEXFS_bin(ba/*::, data*/) {
 	var cnt = 1;
 	write_record(ba, "BrtBeginCellStyleXFs", write_UInt32LE(cnt));
 	write_record(ba, "BrtXF", write_BrtXF({
@@ -333,10 +335,10 @@ function write_CELLXFS_bin(ba, data) {
 	write_record(ba, "BrtEndCellXFs");
 }
 
-function write_STYLES_bin(ba, data) {
+function write_STYLES_bin(ba/*::, data*/) {
 	var cnt = 1;
 
-	write_record(ba, "BrtBeginStyles", write_UInt32LE(1));
+	write_record(ba, "BrtBeginStyles", write_UInt32LE(cnt));
 	write_record(ba, "BrtStyle", write_BrtStyle({
 		xfId:0,
 		builtinId:0,
@@ -346,7 +348,7 @@ function write_STYLES_bin(ba, data) {
 	write_record(ba, "BrtEndStyles");
 }
 
-function write_DXFS_bin(ba, data) {
+function write_DXFS_bin(ba/*::, data*/) {
 	var cnt = 0;
 
 	write_record(ba, "BrtBeginDXFs", write_UInt32LE(cnt));
@@ -354,7 +356,7 @@ function write_DXFS_bin(ba, data) {
 	write_record(ba, "BrtEndDXFs");
 }
 
-function write_TABLESTYLES_bin(ba, data) {
+function write_TABLESTYLES_bin(ba/*::, data*/) {
 	var cnt = 0;
 
 	write_record(ba, "BrtBeginTableStyles", write_BrtBeginTableStyles(cnt, "TableStyleMedium9", "PivotStyleMedium4"));
@@ -362,7 +364,7 @@ function write_TABLESTYLES_bin(ba, data) {
 	write_record(ba, "BrtEndTableStyles");
 }
 
-function write_COLORPALETTE_bin(ba, data) {
+function write_COLORPALETTE_bin(/*::ba, data*/) {
 	return;
 	/* BrtBeginColorPalette [INDEXEDCOLORS] [MRUCOLORS] BrtEndColorPalette */
 }

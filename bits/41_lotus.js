@@ -24,7 +24,7 @@ var WK_ = (function() {
 		throw "Unsupported type " + opts.type;
 	}
 
-	function lotus_to_workbook_buf(d,opts)/*:Workbook*/ {
+	function lotus_to_workbook_buf(d, opts)/*:Workbook*/ {
 		if(!d) return d;
 		var o = opts || {};
 		if(DENSE != null && o.dense == null) o.dense = DENSE;
@@ -32,6 +32,7 @@ var WK_ = (function() {
 		var sheets = {}, snames = [n];
 
 		var refguess = {s: {r:0, c:0}, e: {r:0, c:0} };
+		var sheetRows = o.sheetRows || 0;
 
 		if(d[2] == 0x02) o.Enum = WK1Enum;
 		else if(d[2] == 0x1a) o.Enum = WK3Enum;
@@ -45,7 +46,7 @@ var WK_ = (function() {
 					break;
 				case 0x06: refguess = val; break; /* RANGE */
 				case 0x0F: /* LABEL */
-					if(!o.qpro) val[1].v = val[1].v.substr(1);
+					if(!o.qpro) val[1].v = val[1].v.slice(1);
 					/* falls through */
 				case 0x0D: /* INTEGER */
 				case 0x0E: /* NUMBER */
@@ -63,7 +64,7 @@ var WK_ = (function() {
 					break;
 			} else switch(RT) {
 				case 0x16: /* LABEL16 */
-					val[1].v = val[1].v.substr(1);
+					val[1].v = val[1].v.slice(1);
 					/* falls through */
 				case 0x17: /* NUMBER17 */
 				case 0x18: /* NUMBER18 */
@@ -79,6 +80,7 @@ var WK_ = (function() {
 						sidx = val[3]; n = "Sheet" + (sidx + 1);
 						snames.push(n);
 					}
+					if(sheetRows > 0 && val[0].r >= sheetRows) break;
 					if(o.dense) {
 						if(!s[val[0].r]) s[val[0].r] = [];
 						s[val[0].r][val[0].c] = val[1];
@@ -95,7 +97,7 @@ var WK_ = (function() {
 		return { SheetNames: snames, Sheets:sheets };
 	}
 
-	function parse_RANGE(blob, length) {
+	function parse_RANGE(blob) {
 		var o = {s:{c:0,r:0},e:{c:0,r:0}};
 		o.s.c = blob.read_shift(2);
 		o.s.r = blob.read_shift(2);
@@ -159,7 +161,7 @@ var WK_ = (function() {
 		return o;
 	}
 
-	function parse_cell_3(blob, length) {
+	function parse_cell_3(blob/*::, length*/) {
 		var o = [{c:0,r:0}, {t:'n',v:0}, 0];
 		o[0].r = blob.read_shift(2); o[3] = blob[blob.l++]; o[0].c = blob[blob.l++];
 		return o;
@@ -198,7 +200,7 @@ var WK_ = (function() {
 		var e = blob.read_shift(2);
 		if(e == 0xFFFF) { o[1].v = 0; return o; }
 		var s = e & 0x8000; e = (e&0x7FFF) - 16446;
-		o[1].v = ((e > 0 ? (v2 << e) : (v2 >>> -e)) + (e > -32 ? (v1 << (e + 32)) : (v1 >>> -(e + 32))));
+		o[1].v = (s*2 - 1) * ((e > 0 ? (v2 << e) : (v2 >>> -e)) + (e > -32 ? (v1 << (e + 32)) : (v1 >>> -(e + 32))));
 		return o;
 	}
 

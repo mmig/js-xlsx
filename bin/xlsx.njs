@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /* xlsx.js (C) 2013-present  SheetJS -- http://sheetjs.com */
 /* eslint-env node */
-var n = "xlsx";
 /* vim: set ts=2 ft=javascript: */
+var n = "xlsx";
 var X = require('../');
 require('exit-on-epipe');
 var fs = require('fs'), program = require('commander');
@@ -19,12 +19,14 @@ program
 	.option('-B, --xlsb', 'emit XLSB to <sheetname> or <file>.xlsb')
 	.option('-M, --xlsm', 'emit XLSM to <sheetname> or <file>.xlsm')
 	.option('-X, --xlsx', 'emit XLSX to <sheetname> or <file>.xlsx')
+	.option('-I, --xlam', 'emit XLAM to <sheetname> or <file>.xlam')
 	.option('-Y, --ods',  'emit ODS  to <sheetname> or <file>.ods')
 	.option('-8, --xls',  'emit XLS  to <sheetname> or <file>.xls (BIFF8)')
 	.option('-5, --biff5','emit XLS  to <sheetname> or <file>.xls (BIFF5)')
 	//.option('-4, --biff4','emit XLS  to <sheetname> or <file>.xls (BIFF4)')
 	//.option('-3, --biff3','emit XLS  to <sheetname> or <file>.xls (BIFF3)')
 	.option('-2, --biff2','emit XLS  to <sheetname> or <file>.xls (BIFF2)')
+	.option('-i, --xla',  'emit XLA to <sheetname> or <file>.xla')
 	.option('-6, --xlml', 'emit SSML to <sheetname> or <file>.xls (2003 XML)')
 	.option('-T, --fods', 'emit FODS to <sheetname> or <file>.fods (Flat ODS)')
 
@@ -40,6 +42,8 @@ program
 	.option('-E, --eth',  'emit ETH  to <sheetname> or <file>.eth (Ethercalc)')
 	.option('-t, --txt',  'emit TXT  to <sheetname> or <file>.txt (UTF-8 TSV)')
 	.option('-r, --rtf',  'emit RTF  to <sheetname> or <file>.txt (Table RTF)')
+	.option('-z, --dump', 'dump internal representation as JSON')
+	.option('--props',    'dump workbook properties as CSV')
 
 	.option('-F, --field-sep <sep>', 'CSV field separator', ",")
 	.option('-R, --row-sep <sep>', 'CSV row separator', "\n")
@@ -65,8 +69,10 @@ program.on('--help', function() {
 var workbook_formats = [
 	['xlsx',   'xlsx', 'xlsx'],
 	['xlsm',   'xlsm', 'xlsm'],
+	['xlam',   'xlam', 'xlam'],
 	['xlsb',   'xlsb', 'xlsb'],
 	['xls',     'xls',  'xls'],
+	['xla',     'xla',  'xla'],
 	['biff5', 'biff5',  'xls'],
 	['ods',     'ods',  'ods'],
 	['fods',   'fods', 'fods']
@@ -152,6 +158,14 @@ if(!wb) { console.error(n + ": error parsing " + filename + ": empty workbook");
 /*:: if(!wb) throw new Error("unreachable"); */
 if(program.listSheets) {
 	console.log((wb.SheetNames||[]).join("\n"));
+	process.exit(0);
+}
+if(program.dump) {
+	console.log(JSON.stringify(wb));
+	process.exit(0);
+}
+if(program.props) {
+	dump_props(wb);
 	process.exit(0);
 }
 
@@ -245,4 +259,25 @@ switch(true) {
 			else stream.pipe(process.stdout);
 		} else doit(function(ws) { return X.utils.sheet_to_csv(ws,{FS:program.fieldSep, RS:program.rowSep}); });
 		break;
+}
+
+function dump_props(wb) {
+	var propaoa = [];
+	if(Object.assign && Object.entries) propaoa = Object.entries(Object.assign({}, wb.Props, wb.Custprops));
+	else {
+		var Keys, pi;
+		if(wb.Props) {
+			Keys = Object.keys(wb.Props);
+			for(pi = 0; pi < Keys.length; ++pi) {
+				if(Keys.hasOwnProperty(Keys[pi])) propaoa.push([Keys[pi], Keys[Keys[pi]]]);
+			}
+		}
+		if(wb.Custprops) {
+			Keys = Object.keys(wb.Custprops);
+			for(pi = 0; pi < Keys.length; ++pi) {
+				if(Keys.hasOwnProperty(Keys[pi])) propaoa.push([Keys[pi], Keys[Keys[pi]]]);
+			}
+		}
+	}
+	console.log(X.utils.sheet_to_csv(X.utils.aoa_to_sheet(propaoa)));
 }

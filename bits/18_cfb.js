@@ -35,10 +35,10 @@ type SectorList = {
 }
 type CFBFiles = {[n:string]:CFBEntry};
 */
-/* [MS-CFB] v20130118 */
+/* [MS-CFB] v20171201 */
 var CFB = (function _CFB(){
 var exports/*:CFBModule*/ = /*::(*/{}/*:: :any)*/;
-exports.version = '1.0.1';
+exports.version = '1.0.8';
 /* [MS-CFB] 2.6.4 */
 function namecmp(l/*:string*/, r/*:string*/)/*:number*/ {
 	var L = l.split("/"), R = r.split("/");
@@ -62,6 +62,7 @@ function filename(p/*:string*/)/*:string*/ {
 var fs/*:: = require('fs'); */;
 function get_fs() { return fs || (fs = require('fs')); }
 function parse(file/*:RawBytes*/, options/*:CFBReadOpts*/)/*:CFBContainer*/ {
+if(file.length < 512) throw new Error("CFB file size " + file.length + " < 512");
 var mver = 3;
 var ssz = 512;
 var nmfs = 0; // number of mini FAT sectors
@@ -215,10 +216,10 @@ function build_full_paths(FI/*:CFBFileIndex*/, FP/*:Array<string>*/, Paths/*:Arr
 			if(R !== -1 && dad[R] !== R) dad[i] = dad[R];
 		}
 		if(C !== -1 /*NOSTREAM*/) dad[C] = i;
-		if(L !== -1) { dad[L] = dad[i]; q.push(L); }
-		if(R !== -1) { dad[R] = dad[i]; q.push(R); }
+		if(L !== -1) { dad[L] = dad[i]; if(q.lastIndexOf(L) < j) q.push(L); }
+		if(R !== -1) { dad[R] = dad[i]; if(q.lastIndexOf(R) < j) q.push(R); }
 	}
-	for(i=1; i !== pl; ++i) if(dad[i] === i) {
+	for(i=1; i < pl; ++i) if(dad[i] === i) {
 		if(R !== -1 /*NOSTREAM*/ && dad[R] !== R) dad[i] = dad[R];
 		else if(L !== -1 && dad[L] !== L) dad[i] = dad[L];
 	}
@@ -353,14 +354,14 @@ function read_directory(dir_start/*:number*/, sector_list/*:SectorList*/, sector
 			if(sector_list[o.start] === undefined) sector_list[o.start] = get_sector_list(sectors, o.start, sector_list.fat_addrs, sector_list.ssz);
 			sector_list[o.start].name = o.name;
 			o.content = (sector_list[o.start].data.slice(0,o.size)/*:any*/);
-			prep_blob(o.content, 0);
 		} else {
 			o.storage = 'minifat';
-			if(minifat_store !== ENDOFCHAIN && o.start !== ENDOFCHAIN && sector_list[minifat_store]) {
+			if(o.size < 0) o.size = 0;
+			else if(minifat_store !== ENDOFCHAIN && o.start !== ENDOFCHAIN && sector_list[minifat_store]) {
 				o.content = get_mfat_entry(o, sector_list[minifat_store].data, (sector_list[mini]||{}).data);
-				prep_blob(o.content, 0);
 			}
 		}
+		if(o.content) prep_blob(o.content, 0);
 		files[name] = o;
 		FileIndex.push(o);
 	}
@@ -474,6 +475,7 @@ function rebuild_cfb(cfb/*:CFBContainer*/, f/*:?boolean*/)/*:void*/ {
 }
 
 function _write(cfb/*:CFBContainer*/, options/*:CFBWriteOpts*/)/*:RawBytes*/ {
+	var _opts = options || {};
 	rebuild_cfb(cfb);
 	var L = (function(cfb/*:CFBContainer*/)/*:Array<number>*/{
 		var mini_size = 0, fat_size = 0;
@@ -482,9 +484,10 @@ function _write(cfb/*:CFBContainer*/, options/*:CFBWriteOpts*/)/*:RawBytes*/ {
 			if(!file.content) continue;
 			/*:: if(file.content == null) throw new Error("unreachable"); */
 			var flen = file.content.length;
-			if(flen === 0){}
-			else if(flen < 0x1000) mini_size += (flen + 0x3F) >> 6;
-			else fat_size += (flen + 0x01FF) >> 9;
+			if(flen > 0){
+				if(flen < 0x1000) mini_size += (flen + 0x3F) >> 6;
+				else fat_size += (flen + 0x01FF) >> 9;
+			}
 		}
 		var dir_cnt = (cfb.FullPaths.length +3) >> 2;
 		var mini_cnt = (mini_size + 7) >> 3;
@@ -569,8 +572,9 @@ function _write(cfb/*:CFBContainer*/, options/*:CFBWriteOpts*/)/*:RawBytes*/ {
 		}
 		file = cfb.FileIndex[i];
 		if(i === 0) file.start = file.size ? file.start - 1 : ENDOFCHAIN;
-		flen = 2*(file.name.length+1);
-		o.write_shift(64, file.name, "utf16le");
+		var _nm/*:string*/ = (i === 0 && _opts.root) || file.name;
+		flen = 2*(_nm.length+1);
+		o.write_shift(64, _nm, "utf16le");
 		o.write_shift(2, flen);
 		o.write_shift(1, file.type);
 		o.write_shift(1, file.color);
@@ -607,7 +611,6 @@ function _write(cfb/*:CFBContainer*/, options/*:CFBWriteOpts*/)/*:RawBytes*/ {
 }
 /* [MS-CFB] 2.6.4 (Unicode 3.0.1 case conversion) */
 function find(cfb/*:CFBContainer*/, path/*:string*/)/*:?CFBEntry*/ {
-	//return cfb.find(path);
 	var UCFullPaths/*:Array<string>*/ = cfb.FullPaths.map(function(x) { return x.toUpperCase(); });
 	var UCPaths/*:Array<string>*/ = UCFullPaths.map(function(x) { var y = x.split("/"); return y[y.length - (x.slice(-1) == "/" ? 2 : 1)]; });
 	var k/*:boolean*/ = false;
@@ -617,10 +620,12 @@ function find(cfb/*:CFBContainer*/, path/*:string*/)/*:?CFBEntry*/ {
 	var w/*:number*/ = k === true ? UCFullPaths.indexOf(UCPath) : UCPaths.indexOf(UCPath);
 	if(w !== -1) return cfb.FileIndex[w];
 
-	UCPath = UCPath.replace(chr0,'').replace(chr1,'!');
+	var m = !UCPath.match(chr1);
+	UCPath = UCPath.replace(chr0,'');
+	if(m) UCPath = UCPath.replace(chr1,'!');
 	for(w = 0; w < UCFullPaths.length; ++w) {
-		if(UCFullPaths[w].replace(chr0,'').replace(chr1,'!') == UCPath) return cfb.FileIndex[w];
-		if(UCPaths[w].replace(chr0,'').replace(chr1,'!') == UCPath) return cfb.FileIndex[w];
+		if((m ? UCFullPaths[w].replace(chr1,'!') : UCFullPaths[w]).replace(chr0,'') == UCPath) return cfb.FileIndex[w];
+		if((m ? UCPaths[w].replace(chr1,'!') : UCPaths[w]).replace(chr0,'') == UCPath) return cfb.FileIndex[w];
 	}
 	return null;
 }
@@ -679,8 +684,9 @@ function cfb_new(opts/*:?any*/)/*:CFBContainer*/ {
 }
 
 function cfb_add(cfb/*:CFBContainer*/, name/*:string*/, content/*:?RawBytes*/, opts/*:?any*/)/*:CFBEntry*/ {
-	init_cfb(cfb);
-	var file = CFB.find(cfb, name);
+	var unsafe = opts && opts.unsafe;
+	if(!unsafe) init_cfb(cfb);
+	var file = !unsafe && CFB.find(cfb, name);
 	if(!file) {
 		var fpath/*:string*/ = cfb.FullPaths[0];
 		if(name.slice(0, fpath.length) == fpath) fpath = name;
@@ -691,7 +697,7 @@ function cfb_add(cfb/*:CFBContainer*/, name/*:string*/, content/*:?RawBytes*/, o
 		file = ({name: filename(name), type: 2}/*:any*/);
 		cfb.FileIndex.push(file);
 		cfb.FullPaths.push(fpath);
-		CFB.utils.cfb_gc(cfb);
+		if(!unsafe) CFB.utils.cfb_gc(cfb);
 	}
 	/*:: if(!file) throw new Error("unreachable"); */
 	file.content = (content/*:any*/);

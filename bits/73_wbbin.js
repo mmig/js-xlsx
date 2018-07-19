@@ -1,4 +1,4 @@
-/* [MS-XLSB] 2.4.301 BrtBundleSh */
+/* [MS-XLSB] 2.4.304 BrtBundleSh */
 function parse_BrtBundleSh(data, length/*:number*/) {
 	var z = {};
 	z.Hidden = data.read_shift(4); //hsState ST_SheetState
@@ -12,11 +12,11 @@ function write_BrtBundleSh(data, o) {
 	o.write_shift(4, data.Hidden);
 	o.write_shift(4, data.iTabID);
 	write_RelID(data.strRelID, o);
-	write_XLWideString(data.name.substr(0,31), o);
+	write_XLWideString(data.name.slice(0,31), o);
 	return o.length > o.l ? o.slice(0, o.l) : o;
 }
 
-/* [MS-XLSB] 2.4.807 BrtWbProp */
+/* [MS-XLSB] 2.4.815 BrtWbProp */
 function parse_BrtWbProp(data, length)/*:WBProps*/ {
 	var o/*:WBProps*/ = ({}/*:any*/);
 	var flags = data.read_shift(4);
@@ -61,11 +61,11 @@ function parse_BrtFRTArchID$(data, length) {
 	return o;
 }
 
-/* [MS-XLSB] 2.4.680 BrtName */
+/* [MS-XLSB] 2.4.687 BrtName */
 function parse_BrtName(data, length, opts) {
 	var end = data.l + length;
-	var flags = data.read_shift(4);
-	var chKey = data.read_shift(1);
+	data.l += 4; //var flags = data.read_shift(4);
+	data.l += 1; //var chKey = data.read_shift(1);
 	var itab = data.read_shift(4);
 	var name = parse_XLNameWideString(data);
 	var formula = parse_XLSBNameParsedFormula(data, 0, opts);
@@ -83,10 +83,10 @@ function parse_BrtName(data, length, opts) {
 	return out;
 }
 
-/* [MS-XLSB] 2.1.7.60 Workbook */
+/* [MS-XLSB] 2.1.7.61 Workbook */
 function parse_wb_bin(data, opts)/*:WorkbookFile*/ {
 	var wb = { AppVersion:{}, WBProps:{}, WBView:[], Sheets:[], CalcPr:{}, xmlns: "" };
-	var pass = false, z;
+	var pass = false;
 
 	if(!opts) opts = {};
 	opts.biff = 12;
@@ -131,8 +131,8 @@ function parse_wb_bin(data, opts)/*:WorkbookFile*/ {
 				break;
 
 			/* case 'BrtModelTimeGroupingCalcCol' */
-			/* case 'BrtRevisionPtr' */
-			/* case 'BrtUid' */
+			case 0x0C00: /* 'BrtUid' */
+			case 0x0C01: /* 'BrtRevisionPtr' */
 			case 0x0817: /* 'BrtAbsPath15' */
 			case 0x0216: /* 'BrtBookProtection' */
 			case 0x02A5: /* 'BrtBookProtectionIso' */
@@ -185,8 +185,7 @@ function parse_wb_bin(data, opts)/*:WorkbookFile*/ {
 	return wb;
 }
 
-/* [MS-XLSB] 2.1.7.60 Workbook */
-function write_BUNDLESHS(ba, wb, opts) {
+function write_BUNDLESHS(ba, wb/*::, opts*/) {
 	write_record(ba, "BrtBeginBundleShs");
 	for(var idx = 0; idx != wb.SheetNames.length; ++idx) {
 		var viz = wb.Workbook && wb.Workbook.Sheets && wb.Workbook.Sheets[idx] && wb.Workbook.Sheets[idx].Hidden || 0;
@@ -196,7 +195,7 @@ function write_BUNDLESHS(ba, wb, opts) {
 	write_record(ba, "BrtEndBundleShs");
 }
 
-/* [MS-XLSB] 2.4.643 BrtFileVersion */
+/* [MS-XLSB] 2.4.649 BrtFileVersion */
 function write_BrtFileVersion(data, o) {
 	if(!o) o = new_buf(127);
 	for(var i = 0; i != 4; ++i) o.write_shift(4, 0);
@@ -208,7 +207,7 @@ function write_BrtFileVersion(data, o) {
 	return o.length > o.l ? o.slice(0, o.l) : o;
 }
 
-/* [MS-XLSB] 2.4.298 BrtBookView */
+/* [MS-XLSB] 2.4.301 BrtBookView */
 function write_BrtBookView(idx, o) {
 	if(!o) o = new_buf(29);
 	o.write_shift(-4, 0);
@@ -223,8 +222,7 @@ function write_BrtBookView(idx, o) {
 	return o.length > o.l ? o.slice(0, o.l) : o;
 }
 
-/* [MS-XLSB] 2.1.7.60 Workbook */
-function write_BOOKVIEWS(ba, wb, opts) {
+function write_BOOKVIEWS(ba, wb/*::, opts*/) {
 	/* required if hidden tab appears before visible tab */
 	if(!wb.Workbook || !wb.Workbook.Sheets) return;
 	var sheets = wb.Workbook.Sheets;
@@ -240,10 +238,10 @@ function write_BOOKVIEWS(ba, wb, opts) {
 	write_record(ba, "BrtEndBookViews");
 }
 
-/* [MS-XLSB] 2.4.302 BrtCalcProp */
-function write_BrtCalcProp(data, o) {
+/* [MS-XLSB] 2.4.305 BrtCalcProp */
+/*function write_BrtCalcProp(data, o) {
 	if(!o) o = new_buf(26);
-	o.write_shift(4,0); /* force recalc */
+	o.write_shift(4,0); // force recalc
 	o.write_shift(4,1);
 	o.write_shift(4,0);
 	write_Xnum(0, o);
@@ -251,16 +249,16 @@ function write_BrtCalcProp(data, o) {
 	o.write_shift(1, 0x33);
 	o.write_shift(1, 0x00);
 	return o;
-}
+}*/
 
-/* [MS-XLSB] 2.4.640 BrtFileRecover */
-function write_BrtFileRecover(data, o) {
+/* [MS-XLSB] 2.4.646 BrtFileRecover */
+/*function write_BrtFileRecover(data, o) {
 	if(!o) o = new_buf(1);
 	o.write_shift(1,0);
 	return o;
-}
+}*/
 
-/* [MS-XLSB] 2.1.7.60 Workbook */
+/* [MS-XLSB] 2.1.7.61 Workbook */
 function write_wb_bin(wb, opts) {
 	var ba = buf_array();
 	write_record(ba, "BrtBeginBook");

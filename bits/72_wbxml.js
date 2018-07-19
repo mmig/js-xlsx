@@ -5,7 +5,6 @@ function parse_wb_xml(data, opts)/*:WorkbookFile*/ {
 	var wb = { AppVersion:{}, WBProps:{}, WBView:[], Sheets:[], CalcPr:{}, Names:[], xmlns: "" };
 	var pass = false, xmlns = "xmlns";
 	var dname = {}, dnstart = 0;
-	/*(data.match(tagregex)||[]).forEach */
 	data.replace(tagregex, function xml_wb(x, idx) {
 		var y/*:any*/ = parsexmltag(x);
 		switch(strip_ns(y[0])) {
@@ -31,7 +30,7 @@ function parse_wb_xml(data, opts)/*:WorkbookFile*/ {
 				WBPropsDef.forEach(function(w) {
 					if(y[w[0]] == null) return;
 					switch(w[2]) {
-						case "bool": wb.WBProps[w[0]] = parsexmlbool(y[w[0]], w[0]); break;
+						case "bool": wb.WBProps[w[0]] = parsexmlbool(y[w[0]]); break;
 						case "int": wb.WBProps[w[0]] = parseInt(y[w[0]], 10); break;
 						default: wb.WBProps[w[0]] = y[w[0]];
 					}
@@ -47,7 +46,7 @@ function parse_wb_xml(data, opts)/*:WorkbookFile*/ {
 			/* 18.2.1  bookViews CT_BookViews ? */
 			case '<bookViews': case '<bookViews>': case '</bookViews>': break;
 			/* 18.2.30   workbookView CT_BookView + */
-			case '<workbookView': delete y[0]; wb.WBView.push(y); break;
+			case '<workbookView': case '<workbookView/>': delete y[0]; wb.WBView.push(y); break;
 			case '</workbookView>': break;
 
 			/* 18.2.20 sheets CT_Sheets 1 */
@@ -162,7 +161,7 @@ var WB_XML_ROOT = writextag('workbook', null, {
 	'xmlns:r': XMLNS.r
 });
 
-function write_wb_xml(wb/*:Workbook*/, opts/*:?WriteOpts*/)/*:string*/ {
+function write_wb_xml(wb/*:Workbook*//*::, opts:?WriteOpts*/)/*:string*/ {
 	var o = [XML_HEADER];
 	o[o.length] = WB_XML_ROOT;
 
@@ -190,7 +189,7 @@ function write_wb_xml(wb/*:Workbook*/, opts/*:?WriteOpts*/)/*:string*/ {
 	o[o.length] = "<sheets>";
 	var sheets = wb.Workbook && wb.Workbook.Sheets || [];
 	for(var i = 0; i != wb.SheetNames.length; ++i) {
-		var sht = ({name:escapexml(wb.SheetNames[i].substr(0,31))}/*:any*/);
+		var sht = ({name:escapexml(wb.SheetNames[i].slice(0,31))}/*:any*/);
 		sht.sheetId = ""+(i+1);
 		sht["r:id"] = "rId"+(i+1);
 		if(sheets[i]) switch(sheets[i].Hidden) {
